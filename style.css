@@ -36,7 +36,7 @@ button:disabled { cursor: default; opacity: .45; }
   border-bottom: 1px solid var(--line);
 }
 h1 { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; margin: 0; letter-spacing: -.4px; }
-.mark { color: var(--accent); font-size: 31px; line-height: 1; margin-right: 3px; }
+.mark { display: block; width: 28px; height: 28px; flex: none; margin-right: 3px; }
 .slash { color: #515d54; font-weight: 400; }
 .product { color: var(--muted); font-weight: 400; }
 .titlebar-right { display: flex; gap: 27px; align-items: center; }
