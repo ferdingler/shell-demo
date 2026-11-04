@@ -102,7 +102,7 @@ noscript { padding: 32px; color: #ed968c; }
   .terminal-region { padding: 20px 14px 8px; }
   .statusbar { padding: 0 16px; gap: 8px; min-height: 46px; }
   .shortcuts, .session-info { gap: 15px; }
-  .desktop-hint, .local-label { display: none; }
+  .desktop-hint { display: none; }
   #reset { padding-left: 13px; }
   #last-result { max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
 }
