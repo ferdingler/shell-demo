@@ -1,0 +1,6 @@
+node_modules/
+target/
+generated/
+dist/
+test-results/
+.DS_Store

@@ -1,0 +1,12 @@
+package strands:browser-demo;
+
+world terminal {
+    record output {
+        status: s32,
+        stdout: string,
+        stderr: string,
+        cwd: string,
+        files: list<string>,
+    }
+    export execute: func(command: string) -> output;
+}
