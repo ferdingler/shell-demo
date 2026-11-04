@@ -80,14 +80,6 @@ function complete(before) {
     : choices
 }
 
-async function welcome() {
-  await editor.write(
-    `${c.white}Strands Shell${c.reset}\r\n` +
-    `${c.muted}A little workspace, entirely in this tab.\r\n` +
-    `Type ${c.white}help${c.muted} to look around.${c.reset}\r\n\r\n`,
-  )
-}
-
 async function showHelp() {
   await editor.write([
     `${c.white}Make yourself at home.${c.reset}`,
@@ -176,7 +168,6 @@ function startSession(message, clear = false) {
   editor.enqueue(async () => {
     if (clear) await editor.clear()
     if (message) await output(message + '\n', c.muted)
-    if (clear) await welcome()
   })
   if (!globalThis.WebAssembly?.Suspending || !WebAssembly.promising) {
     fail('This shell needs WebAssembly JSPI. Open it in a current Chrome or Edge browser.')
@@ -268,6 +259,5 @@ window.addEventListener('pagehide', () => {
   worker?.terminate()
 })
 
-await welcome()
 startSession()
 term.focus()
