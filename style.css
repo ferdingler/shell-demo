@@ -50,7 +50,7 @@ body[data-state="busy"] .state-dot { animation: pulse 1s ease-in-out infinite; }
 .terminal-region { flex: 1; min-height: 0; padding: 27px 30px 12px; }
 #terminal { height: 100%; }
 .xterm { height: 100%; }
-.xterm-viewport { background-color: #131615; scrollbar-color: #3c463f transparent; scrollbar-width: thin; }
+.xterm .xterm-viewport { background-color: #131615; scrollbar-color: #3c463f transparent; scrollbar-width: thin; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
 .xterm-viewport::-webkit-scrollbar-thumb { background: #3c463f; border-radius: 4px; }
 .xterm .xterm-screen { outline: none; }

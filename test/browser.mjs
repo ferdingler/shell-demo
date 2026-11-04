@@ -52,6 +52,8 @@ async function checkBounds() {
     const footer = document.querySelector('.statusbar').getBoundingClientRect()
     return screen.right <= container.right && screen.bottom <= container.bottom && screen.bottom <= footer.top
   }), true, 'Terminal cells stay inside the viewport and above the footer')
+  assert.equal(await page.locator('.xterm-viewport').evaluate(e => getComputedStyle(e).backgroundColor),
+    'rgb(19, 22, 21)', 'Unused terminal space matches the page background')
 }
 
 async function type(script) {
