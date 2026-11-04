@@ -12,8 +12,6 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    env:
-      WASI_SDK_PATH: ${{ runner.temp }}/wasi-sdk-34.0-x86_64-linux
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -27,6 +25,7 @@ jobs:
             --output "$RUNNER_TEMP/wasi-sdk.tar.gz"
           echo "b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4  $RUNNER_TEMP/wasi-sdk.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/wasi-sdk.tar.gz" -C "$RUNNER_TEMP"
+          echo "WASI_SDK_PATH=$RUNNER_TEMP/wasi-sdk-34.0-x86_64-linux" >> "$GITHUB_ENV"
       - run: npm ci
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings

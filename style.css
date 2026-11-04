@@ -47,9 +47,10 @@ body[data-state="ready"] .state-dot { background: var(--accent); box-shadow: 0 0
 body[data-state="failed"] .state-dot { background: #ed968c; }
 body[data-state="busy"] .state-dot { animation: pulse 1s ease-in-out infinite; }
 
-#terminal { flex: 1; min-height: 0; padding: 27px 30px 12px; }
+.terminal-region { flex: 1; min-height: 0; padding: 27px 30px 12px; }
+#terminal { height: 100%; }
 .xterm { height: 100%; }
-.xterm-viewport { scrollbar-color: #3c463f transparent; scrollbar-width: thin; }
+.xterm-viewport { background-color: #131615; scrollbar-color: #3c463f transparent; scrollbar-width: thin; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
 .xterm-viewport::-webkit-scrollbar-thumb { background: #3c463f; border-radius: 4px; }
 .xterm .xterm-screen { outline: none; }
@@ -92,7 +93,7 @@ noscript { padding: 32px; color: #ed968c; }
   h1 { font-size: 12px; gap: 8px; }
   .titlebar-right { gap: 14px; }
   .session-state { font-size: 9px; }
-  #terminal { padding: 20px 14px 8px; }
+  .terminal-region { padding: 20px 14px 8px; }
   .statusbar { padding: 0 16px; gap: 8px; min-height: 46px; }
   .shortcuts, .session-info { gap: 15px; }
   .desktop-hint, .local-label { display: none; }

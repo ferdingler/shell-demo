@@ -45,6 +45,15 @@ async function screen() {
   return page.locator('.xterm-rows').innerText()
 }
 
+async function checkBounds() {
+  assert.equal(await page.evaluate(() => {
+    const screen = document.querySelector('.xterm-screen').getBoundingClientRect()
+    const container = document.querySelector('#terminal').getBoundingClientRect()
+    const footer = document.querySelector('.statusbar').getBoundingClientRect()
+    return screen.right <= container.right && screen.bottom <= container.bottom && screen.bottom <= footer.top
+  }), true, 'Terminal cells stay inside the viewport and above the footer')
+}
+
 async function type(script) {
   await page.locator('.xterm-helper-textarea').focus()
   await page.keyboard.insertText(script)
@@ -55,6 +64,7 @@ async function enter() {
   await page.keyboard.press('Enter')
   await page.waitForFunction(n => window.shellResults.length > n, count)
   await ready()
+  await checkBounds()
   return page.evaluate(() => window.shellResults.at(-1))
 }
 
@@ -203,11 +213,13 @@ try {
   await type('echo resize')
   await page.setViewportSize({ width: 390, height: 844 })
   await page.waitForTimeout(150)
+  await checkBounds()
   assert.equal((await enter()).stdout, 'resize\n')
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.screenshot({ path: 'test-results/mobile.png' })
   await page.setViewportSize({ width: 390, height: 360 })
   await command('echo keyboard', 'keyboard\n')
+  await checkBounds()
   assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), true)
   checks.push('Resize preserves input; mobile and soft-keyboard-height layouts')
 
