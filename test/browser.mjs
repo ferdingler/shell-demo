@@ -230,7 +230,7 @@ try {
   await page.reload()
   await ready()
   await page.locator('#help').click()
-  await page.waitForFunction(() => document.querySelector('.xterm-rows').innerText.includes('Make yourself'))
+  await page.waitForFunction(() => document.querySelector('.xterm-rows').innerText.includes('Bourne-compatible shell'))
   await page.screenshot({ path: 'test-results/help.png' })
 
   await page.locator('#accessibility').focus()

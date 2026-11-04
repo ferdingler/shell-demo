@@ -82,8 +82,16 @@ function complete(before) {
 }
 
 async function showHelp() {
+  const description = 'Strands Shell is a Bourne-compatible shell that runs inside your own process. It includes grep, sed, jq, curl, find, and dozens of other commands without fork, exec, or raw system calls.'
+  const paragraph = []
+  const width = Math.min(72, term.cols)
+  for (const word of description.split(' ')) {
+    const line = paragraph.at(-1)
+    if (!line || line.length + word.length + 1 > width) paragraph.push(word)
+    else paragraph[paragraph.length - 1] += ` ${word}`
+  }
   await editor.write([
-    `${c.white}Make yourself at home.${c.reset}`,
+    `${c.white}${paragraph.join('\r\n')}${c.reset}`,
     '',
     `  ${c.green}ls${c.reset}                            look around`,
     `  ${c.green}cat README.txt${c.reset}                meet your workspace`,
