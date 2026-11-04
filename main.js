@@ -15,7 +15,7 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 const smallScreen = matchMedia('(max-width: 650px)')
 const term = new Terminal({
   allowProposedApi: true,
-  fontFamily: '"IBM Plex Mono", monospace',
+  fontFamily: '"JetBrains Mono", ui-monospace, monospace',
   fontSize: smallScreen.matches ? 13 : 14,
   fontWeight: '400',
   fontWeightBold: '500',
@@ -40,6 +40,7 @@ const fit = new FitAddon()
 term.loadAddon(fit)
 term.loadAddon(new Unicode11Addon())
 term.unicode.activeVersion = '11'
+await document.fonts.load(`${term.options.fontSize}px "JetBrains Mono"`)
 term.open(container)
 term.textarea.setAttribute('aria-label', 'Shell command')
 term.textarea.setAttribute('enterkeyhint', 'send')

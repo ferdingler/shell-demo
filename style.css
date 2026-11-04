@@ -1,10 +1,14 @@
-@import '@fontsource/ibm-plex-mono/latin-400.css';
-@import '@fontsource/ibm-plex-mono/latin-500.css';
+@import '@fontsource/jetbrains-mono/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+@import '@fontsource/space-grotesk/latin-400.css';
+@import '@fontsource/space-grotesk/latin-500.css';
 @import '@xterm/xterm/css/xterm.css';
 
 :root {
   color-scheme: dark;
-  font-family: 'IBM Plex Mono', monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-body: 'Space Grotesk', system-ui, sans-serif;
+  font-family: var(--font-body);
   font-synthesis: none;
   color: #dce1d9;
   background: #131615;
@@ -28,6 +32,7 @@ button:disabled { cursor: default; opacity: .45; }
 .accessibility-control:focus { z-index: 10; top: 12px; left: 24px; width: auto; height: auto; padding: 12px; clip-path: none; background: #1c211e; border: 1px solid var(--accent); }
 
 .titlebar {
+  font-family: var(--font-mono);
   min-height: 65px;
   padding: 0 32px;
   display: flex;
@@ -56,6 +61,7 @@ body[data-state="busy"] .state-dot { animation: pulse 1s ease-in-out infinite; }
 .xterm .xterm-screen { outline: none; }
 
 .statusbar {
+  font-family: var(--font-mono);
   min-height: 42px;
   border-top: 1px solid var(--line);
   display: flex;
@@ -77,9 +83,9 @@ body[data-state="busy"] .state-dot { animation: pulse 1s ease-in-out infinite; }
 
 dialog { max-width: calc(100vw - 32px); padding: 28px; background: #1c211e; color: #dce1d9; border: 1px solid #424d44; border-radius: 6px; }
 dialog::backdrop { background: #070a09b3; }
-dialog h2 { font-size: 15px; font-weight: 500; margin: 0 0 14px; }
+dialog h2 { font-family: var(--font-mono); font-size: 15px; font-weight: 500; margin: 0 0 14px; }
 dialog p { color: #a7b1a9; font-size: 12px; line-height: 1.8; margin: 0 0 25px; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 23px; font-size: 11px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 23px; font-family: var(--font-mono); font-size: 11px; }
 .dialog-actions button { padding: 8px 0; }
 .dialog-actions .confirm { color: var(--accent); }
 noscript { padding: 32px; color: #ed968c; }

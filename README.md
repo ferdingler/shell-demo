@@ -96,9 +96,10 @@ The adapter returns directory metadata for the prompt and completion without
 running an extra shell command or changing `$?`.
 
 [xterm.js](https://xtermjs.org/) renders the terminal. [Jco](https://github.com/bytecodealliance/jco)
-adapts the WebAssembly component to the browser. IBM Plex Mono is bundled locally;
-the page loads no external fonts. Command output retains text colors but cannot
-change the clipboard, create terminal hyperlinks, or reposition the cursor.
+adapts the WebAssembly component to the browser. JetBrains Mono and Space Grotesk
+match the official site and are bundled locally; the page loads no external fonts.
+Command output retains text colors but cannot change the clipboard, create
+terminal hyperlinks, or reposition the cursor.
 
 Licensed under Apache-2.0. To start developing, build once, run `npm run dev`, and
 use `npm run check:browser` against a production preview before pushing.
