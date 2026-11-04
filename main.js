@@ -2,7 +2,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { LineEditor } from './line-editor.js'
-import { colors as c, displayPath, terminalText } from './terminal-text.js'
+import { intro } from './intro.js'
+import { colors as c, displayPath, terminalText, wrapText } from './terminal-text.js'
 import './style.css'
 
 const container = document.querySelector('#terminal')
@@ -19,7 +20,7 @@ const term = new Terminal({
   fontSize: smallScreen.matches ? 13 : 14,
   fontWeight: '400',
   fontWeightBold: '500',
-  lineHeight: 1.5,
+  lineHeight: 1.2,
   cursorStyle: 'block',
   cursorBlink: !reducedMotion.matches,
   scrollback: 3000,
@@ -56,9 +57,13 @@ let files = []
 let nextId = 0
 let activeId = 0
 let completed = 0
+let openingVisible = false
 
 const commands = 'alias awk basename cat cd chmod clear cp cut date dirname echo env exit export false find grep head help history jq ls lua mkdir mv printf pwd reset rm rmdir sed seq sleep sort source tail tee test touch tr true uname uniq unset wc which whoami xargs'.split(' ')
 const editor = new LineEditor(term, { submit: run, interrupt, complete })
+term.onData(data => {
+  if (['\x03', '\x0c', '\t'].includes(data)) openingVisible = false
+})
 
 function setState(value) {
   state = value
@@ -83,15 +88,8 @@ function complete(before) {
 
 async function showHelp() {
   const description = 'Strands Shell is a Bourne-compatible shell that runs inside your own process. It includes grep, sed, jq, curl, find, and dozens of other commands without fork, exec, or raw system calls.'
-  const paragraph = []
-  const width = Math.min(72, term.cols)
-  for (const word of description.split(' ')) {
-    const line = paragraph.at(-1)
-    if (!line || line.length + word.length + 1 > width) paragraph.push(word)
-    else paragraph[paragraph.length - 1] += ` ${word}`
-  }
   await editor.write([
-    `${c.white}${paragraph.join('\r\n')}${c.reset}`,
+    `${c.white}${wrapText(description, Math.min(72, term.cols))}${c.reset}`,
     '',
     `  ${c.green}ls${c.reset}                            look around`,
     `  ${c.green}cat README.txt${c.reset}                meet your workspace`,
@@ -128,6 +126,7 @@ async function output(text, color = '') {
 }
 
 async function run(command) {
+  openingVisible = false
   const trimmed = command.trim()
   if (!trimmed) return prompt()
   if (trimmed === 'clear') {
@@ -170,12 +169,17 @@ function startSession(message, clear = false) {
   clearTimeout(timer)
   worker?.terminate()
   editor.active = false
+  openingVisible = false
   setState('loading')
   result.textContent = ''
   cwd = '/home/lash/workspace'
   files = []
   editor.enqueue(async () => {
-    if (clear) await editor.clear()
+    if (clear) {
+      await editor.clear()
+      await editor.write(intro(term.cols))
+      openingVisible = true
+    }
     if (message) await output(message + '\n', c.muted)
   })
   if (!globalThis.WebAssembly?.Suspending || !WebAssembly.promising) {
@@ -225,6 +229,7 @@ help.addEventListener('click', () => editor.enqueue(async () => {
   term.focus()
 }))
 document.querySelector('#clear').addEventListener('click', () => editor.enqueue(async () => {
+  openingVisible = false
   await editor.clear()
   term.focus()
 }))
@@ -255,9 +260,24 @@ term.element.addEventListener('paste', event => {
 }, true)
 
 new ResizeObserver(() => editor.enqueue(async () => {
+  const previousSize = `${term.cols}:${term.rows}`
   const fontSize = smallScreen.matches ? 13 : 14
   if (term.options.fontSize !== fontSize) term.options.fontSize = fontSize
   fit.fit()
+  if (openingVisible && state !== 'failed' && previousSize !== `${term.cols}:${term.rows}`) {
+    // Reflow the opening while preserving any command the user has started.
+    const active = editor.active
+    const draft = editor.text.join('')
+    const cursor = editor.cursor
+    editor.active = false
+    await editor.clear()
+    await editor.write(intro(term.cols))
+    if (active) {
+      await editor.prompt(displayPath(cwd))
+      await editor.replace(draft)
+      editor.cursor = cursor
+    }
+  }
   if (editor.active) await editor.render()
 })).observe(container)
 reducedMotion.addEventListener('change', () => {
@@ -268,5 +288,5 @@ window.addEventListener('pagehide', () => {
   worker?.terminate()
 })
 
-startSession()
+startSession(undefined, true)
 term.focus()

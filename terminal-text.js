@@ -19,6 +19,16 @@ export const colors = {
   white: '\x1b[38;2;220;225;217m',
 }
 
+export function wrapText(text, columns) {
+  const lines = []
+  for (const word of text.split(' ')) {
+    const line = lines.at(-1)
+    if (!line || line.length + word.length + 1 > columns) lines.push(word)
+    else lines[lines.length - 1] += ` ${word}`
+  }
+  return lines.join('\r\n')
+}
+
 export function displayPath(cwd) {
   const path = plainText(cwd).replace(/[\r\n\t]/g, '')
   return path === '/home/lash' || path.startsWith('/home/lash/')
