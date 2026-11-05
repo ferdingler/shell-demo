@@ -36,7 +36,10 @@ flags, so other sites, including local dev servers, cannot pair.
 ## Tools
 
 - `run_shell {command}` runs a command in the tab's in-memory sandbox and
-  returns exit status, cwd, stdout, and stderr. No network, no host files.
+  returns exit status, cwd, stdout, and stderr, as text and as structured
+  content. Output over 16,000 characters keeps its start and end. Cancelling
+  the request skips the command if it has not started. No network, no host
+  files.
 - `pairing_url` returns the URL to open and whether a tab is connected.
 
 ## Security

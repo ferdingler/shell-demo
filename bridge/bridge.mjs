@@ -135,6 +135,16 @@ const tools = [
       properties: { command: { type: 'string', description: 'Shell command or script to run' } },
       required: ['command'],
     },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'integer', description: 'Exit status' },
+        cwd: { type: 'string', description: 'Working directory after the command' },
+        stdout: { type: 'string' },
+        stderr: { type: 'string' },
+      },
+      required: ['status', 'cwd', 'stdout', 'stderr'],
+    },
   },
   {
     name: 'pairing_url',
@@ -158,6 +168,8 @@ export function clip(value = '') {
 }
 
 const text = (value, isError = false) => ({ content: [{ type: 'text', text: value }], isError })
+// Thrown when the client cancels a request; MCP expects no reply to it.
+const cancelled = Symbol('cancelled')
 const rpcResult = (id, result) => ({ jsonrpc: '2.0', id, result })
 const rpcError = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, message } })
 
@@ -252,36 +264,51 @@ export function createBridge({
     accept(new Socket(stream))
   }
 
-  function runInPage(command) {
+  // Gives up on a page command: the page skips it if it has not started.
+  function abandon(id, error) {
+    const call = pending.get(id)
+    if (!call) return
+    pending.delete(id)
+    clearTimeout(call.timer)
+    page?.send({ type: 'cancel', id })
+    call.reject(error)
+  }
+
+  function runInPage(command, requestId) {
     return new Promise((resolve, reject) => {
       if (!page) return reject(new Error(`No browser tab is connected. Ask the user to open this pairing URL in Chrome or Edge: ${pairingUrl()}`))
       const id = ++nextId
-      const timer = setTimeout(() => {
-        pending.delete(id)
-        page?.send({ type: 'cancel', id })
-        reject(new Error(`The command did not finish within ${callTimeout / 1000}s. ` +
-          'If it had not started yet, it will not run.'))
-      }, callTimeout)
-      pending.set(id, { resolve, reject, timer })
+      const timer = setTimeout(() => abandon(id, new Error(`The command did not finish within ${callTimeout / 1000}s. ` +
+        'If it had not started yet, it will not run.')), callTimeout)
+      pending.set(id, { resolve, reject, timer, requestId })
       page.send({ type: 'run', id, command })
     })
   }
 
-  async function callTool(name, input) {
+  function cancelRequest(requestId) {
+    for (const [id, call] of pending) if (call.requestId === requestId) abandon(id, cancelled)
+  }
+
+  async function callTool(name, input, requestId) {
     if (name === 'pairing_url') {
       return text(`${pairingUrl()}\n${page ? 'A browser tab is connected.' : 'No browser tab is connected yet.'}`)
     }
     if (name !== 'run_shell') throw Object.assign(new Error(`Unknown tool: ${name}`), { code: -32602 })
     if (typeof input?.command !== 'string') throw Object.assign(new Error('command must be a string'), { code: -32602 })
     try {
-      const result = await runInPage(input.command)
-      return text([
-        `exit status: ${result.status}`,
-        `cwd: ${result.cwd}`,
-        `stdout:\n${clip(result.stdout)}`,
-        `stderr:\n${clip(result.stderr)}`,
-      ].join('\n'))
+      const result = await runInPage(input.command, requestId)
+      const output = { status: result.status, cwd: result.cwd, stdout: clip(result.stdout), stderr: clip(result.stderr) }
+      return {
+        ...text([
+          `exit status: ${output.status}`,
+          `cwd: ${output.cwd}`,
+          `stdout:\n${output.stdout}`,
+          `stderr:\n${output.stderr}`,
+        ].join('\n')),
+        structuredContent: output,
+      }
     } catch (error) {
+      if (error === cancelled) throw error
       return text(error.message, true)
     }
   }
@@ -302,11 +329,15 @@ export function createBridge({
         case 'tools/list':
           return rpcResult(id, { tools })
         case 'tools/call':
-          return rpcResult(id, await callTool(params?.name, params?.arguments))
+          return rpcResult(id, await callTool(params?.name, params?.arguments, id))
+        case 'notifications/cancelled':
+          cancelRequest(params?.requestId)
+          return null
         default:
           return isRequest ? rpcError(id, -32601, `Method not found: ${method}`) : null
       }
     } catch (error) {
+      if (error === cancelled) return null
       return isRequest ? rpcError(id, error.code || -32603, error.message) : null
     }
   }

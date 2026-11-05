@@ -132,6 +132,17 @@ test('run_shell forwards to the paired page and formats its result', async () =>
   const { result } = await reply
   assert.equal(result.isError, false)
   assert.equal(result.content[0].text, 'exit status: 0\ncwd: /w\nstdout:\nhi\n\nstderr:\n')
+  assert.deepEqual(result.structuredContent, { status: 0, cwd: '/w', stdout: 'hi\n', stderr: '' })
+})
+
+test('a cancelled request gets no reply and the page is told to skip it', async () => {
+  const bridge = createBridge({ token: 't' })
+  const page = fakePage(bridge, 't')
+  const reply = rpc(bridge, { id: 'req-7', method: 'tools/call', params: { name: 'run_shell', arguments: { command: 'ls' } } })
+  const runId = page.sent.at(-1).id
+  assert.equal(await rpc(bridge, { method: 'notifications/cancelled', params: { requestId: 'req-7' } }), null)
+  assert.equal(await reply, null)
+  assert.deepEqual(page.sent.at(-1), { type: 'cancel', id: runId })
 })
 
 test('a wrong token is rejected and a newer page replaces the older one', () => {
