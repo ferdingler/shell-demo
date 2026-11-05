@@ -1,10 +1,5 @@
 # Strands Shell, in your browser
 
-This branch includes a [throwaway browser agent bridge](prototypes/agent-bridge/README.md).
-It lets an MCP client control the browser's workspace after explicit approval.
-Use that guide for the prototype relay; the instructions below describe the
-underlying static terminal.
-
 A minimal terminal running the [Strands Shell](https://github.com/strands-agents/shell)
 Rust core in a browser worker. Open the page and start typing. Commands, files,
 and variables stay in the tab; the server serves static assets.
