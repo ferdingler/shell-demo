@@ -324,6 +324,7 @@ dialog.addEventListener('submit', event => {
 })
 dialog.addEventListener('close', () => {
   term.focus()
+  pumpAgent()
 })
 
 // Let pasted scripts be inspected and edited; only Enter executes them.

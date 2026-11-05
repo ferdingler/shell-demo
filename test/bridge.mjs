@@ -101,6 +101,14 @@ try {
     assert.match(result.content[0].text, expected, command)
     console.log(`PASS run_shell ${command}\n${result.content[0].text.replace(/^/gm, '    ')}`)
   }
+  await page.click('#reset')
+  const queued = runShell('echo after-dialog')
+  await page.waitForTimeout(300)
+  await page.click('#reset-dialog button[value="cancel"]')
+  const afterDialog = await queued
+  assert.match(afterDialog.content[0].text, /stdout:\nafter-dialog\n/)
+  console.log('PASS agent command queued behind the reset dialog runs once it closes')
+
   const screen = await page.locator('.xterm-rows').innerText()
   assert.match(screen, /agent › ~\/workspace ❯ echo hi \| tr a-z A-Z/)
   await mkdir('test-results', { recursive: true })
