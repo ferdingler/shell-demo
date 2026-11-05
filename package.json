@@ -12,7 +12,8 @@
     "dev": "vite --host 127.0.0.1",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test test/*.test.js",
-    "check:browser": "node test/browser.mjs"
+    "check:browser": "node test/browser.mjs",
+    "check:bridge": "node test/bridge.mjs"
   },
   "dependencies": {
     "@bytecodealliance/preview2-shim": "0.31.0",
