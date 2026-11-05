@@ -5,7 +5,7 @@ import { LineEditor } from './line-editor.js'
 import { intro } from './intro.js'
 import { complete } from './completion.js'
 import { connectAgent, readPairing } from './agent-link.js'
-import { LimitError, ResetError, createSession } from './session.js'
+import { LimitError, ResetError, commandLimit, createSession } from './session.js'
 import { colors as c, displayPath, plainText, terminalText, wrapText } from './terminal-text.js'
 import './style.css'
 
@@ -58,7 +58,9 @@ const session = createSession({
 // Bumped by every restart, so work queued for an older engine is dropped.
 let generation = 0
 let state = 'loading'
-let cwd = '/home/lash/workspace'
+// The engine reports its working directory and files when it starts and after
+// every command.
+let cwd = ''
 let files = []
 let completed = 0
 let openingVisible = false
@@ -104,7 +106,7 @@ async function showHelp() {
     '',
     `Files live until reload or reset. Network is disabled.`,
     `Commands finish before output appears. No interactive`,
-    `programs. Interrupting or the 5s limit resets files.${c.reset}`,
+    `programs. Interrupting or the ${commandLimit / 1000}s limit resets files.${c.reset}`,
     '',
   ].join('\r\n') + '\r\n')
 }
@@ -205,12 +207,12 @@ function startSession(message, clear = false) {
   failure = ''
   setState('loading')
   result.textContent = ''
-  cwd = '/home/lash/workspace'
-  files = []
   if (agentJob) {
     agent.reply(agentJob.id, { stdout: '', stderr: message || 'The workspace was reset.', status: 130, cwd })
     agentJob = null
   }
+  cwd = ''
+  files = []
   editor.enqueue(async () => {
     if (clear) {
       await editor.clear()
@@ -221,8 +223,8 @@ function startSession(message, clear = false) {
   })
   session.start().then(ready => editor.enqueue(async () => {
     if (current !== generation) return
-    cwd = ready.cwd || cwd
-    files = ready.files || files
+    cwd = ready.cwd
+    files = ready.files
     await settle()
   }), error => {
     if (current === generation && !(error instanceof ResetError)) fail(error.message)

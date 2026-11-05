@@ -1,4 +1,5 @@
 import { outgoingHandler } from '@bytecodealliance/preview2-shim/http'
+import { home } from './terminal-text.js'
 
 // Derived from the terminal prototype; returns cwd and supports completion metadata.
 // The demo provides no network capability, including for otherwise public URLs.
@@ -7,8 +8,8 @@ outgoingHandler.handle = () => {
 }
 
 const seed = `
-mkdir -p /home/lash/workspace
-cd /home/lash/workspace
+mkdir -p ${home}/workspace
+cd ${home}/workspace
 cat > app.log <<'EOF'
 09:00:01 INFO  worker started
 09:00:02 INFO  processing batch 1

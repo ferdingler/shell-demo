@@ -30,9 +30,12 @@ export function wrapText(text, columns) {
   return lines.join('\r\n')
 }
 
+// The shell's home directory; worker.js creates the workspace inside it.
+export const home = '/home/lash'
+
 export function displayPath(cwd) {
   const path = plainText(cwd).replace(/[\r\n\t]/g, '')
-  return path === '/home/lash' || path.startsWith('/home/lash/')
-    ? `~${path.slice('/home/lash'.length)}`
+  return path === home || path.startsWith(`${home}/`)
+    ? `~${path.slice(home.length)}`
     : path
 }
