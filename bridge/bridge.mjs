@@ -254,6 +254,16 @@ const tools = [
 // gets it back; any other request gets the newest, and the client decides.
 const protocolVersions = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']
 
+// Keep tool results small enough for an agent's context: the start and end of
+// long output survive, with a note saying how much was dropped.
+const outputLimit = 16000
+function clip(value = '') {
+  if (value.length <= outputLimit) return value
+  const head = value.slice(0, outputLimit * 0.75)
+  const tail = value.slice(-outputLimit * 0.25)
+  return `${head}\n[... ${value.length - head.length - tail.length} characters truncated ...]\n${tail}`
+}
+
 const text = (value, isError = false) => ({ content: [{ type: 'text', text: value }], isError })
 
 async function callTool(name, input) {
@@ -267,8 +277,8 @@ async function callTool(name, input) {
     return text([
       `exit status: ${result.status}`,
       `cwd: ${result.cwd}`,
-      `stdout:\n${result.stdout || ''}`,
-      `stderr:\n${result.stderr || ''}`,
+      `stdout:\n${clip(result.stdout)}`,
+      `stderr:\n${clip(result.stderr)}`,
     ].join('\n'))
   } catch (error) {
     return text(error.message, true)

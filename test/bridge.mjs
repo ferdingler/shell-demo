@@ -117,6 +117,11 @@ try {
   await page.screenshot({ path: 'test-results/agent-bridge.png' })
   console.log('PASS terminal shows agent commands (test-results/agent-bridge.png)')
 
+  const long = (await runShell("lua -e 'for i = 1, 20000 do print(i) end'")).content[0].text
+  assert.match(long, /stdout:\n1\n2\n[\s\S]*characters truncated[\s\S]*\n20000\n/)
+  assert.ok(long.length < 17000, `long output is clipped (${long.length} chars)`)
+  console.log('PASS long output keeps its start and end within the limit')
+
   const unsupported = await browser.newPage()
   await unsupported.addInitScript(() => { delete WebAssembly.Suspending })
   await unsupported.goto(pairingUrl)
