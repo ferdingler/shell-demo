@@ -53,6 +53,14 @@ Pasted scripts remain editable until Enter. Use normal terminal selection to cop
 output. **Enable screen reader mode** is the first control in the page's tab order;
 it becomes visible on keyboard focus. Motion follows the system's reduced-motion setting.
 
+## Connect an agent
+
+`bridge/bridge.mjs` lets a local AI agent, such as Claude Code, run commands in
+this tab's shell over MCP, with no hosted backend. The agent starts the bridge on
+your machine, and the page connects to it on `127.0.0.1` after you open its
+pairing URL. Commands appear in the terminal at an `agent ›` prompt. See
+[bridge/README.md](bridge/README.md).
+
 ## Limits
 
 - This is a command terminal, not a pseudoterminal: output arrives after a command
@@ -76,12 +84,14 @@ cargo fmt --check
 cargo clippy --all-targets --locked -- -D warnings
 npx playwright install chromium
 npm run check:browser
+npm run check:bridge
 ```
 
 Set `DEMO_ORIGIN` to test another preview URL. Browser checks cover shell state,
 editing, completion, paste, Unicode, resizing, network denial, offline execution,
-interruption, timeout, reset, and unsupported browsers. They save screenshots and
-a report in `test-results/`.
+interruption, timeout, reset, and unsupported browsers. The bridge check pairs a
+tab with the agent bridge and runs commands through it as an MCP client. Both save
+screenshots, and the browser check a report, in `test-results/`.
 
 GitHub Actions builds and tests the site and uploads `dist/` as `shell-demo-site`.
 To host it, serve that directory with any static host that supports `.wasm` assets.

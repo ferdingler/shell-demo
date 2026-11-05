@@ -57,13 +57,23 @@ JSON text frames over `ws://127.0.0.1:<port>`:
 page   -> bridge  {type:'hello', token}
 bridge -> page    {type:'paired'}
 bridge -> page    {type:'run', id, command}
-bridge -> page    {type:'cancel', id}               the call timed out; skip it if still queued
+bridge -> page    {type:'cancel', id}            call timed out or was cancelled; skip it if still queued
 page   -> bridge  {type:'result', id, stdout, stderr, status, cwd}
-page   -> bridge  {type:'error', id, message}   the tab cannot run commands
+page   -> bridge  {type:'error', id, message}    the tab cannot run commands
 ```
 
 Calls time out after 10 seconds. Close code 4001 means a bad token; 4000 means
 another tab took over.
+
+## Browser permission
+
+When the page comes from a public site such as `https://tryshell.sh`, recent
+Chrome and Edge versions may ask for permission to access devices on the local
+network before the page can reach `127.0.0.1`. Allow it for the site; if it is
+blocked, the titlebar stays at **agent disconnected** and you can re-enable it
+from the site settings. Pages served from `127.0.0.1` or `localhost` are not
+asked. `npm run check:bridge` serves the page locally, so it does not cover this
+prompt.
 
 ## Test
 
