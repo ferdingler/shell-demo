@@ -1,9 +1,5 @@
 # Strands Shell, in your browser
 
-This branch contains a [shared-folder agent experiment](prototypes/folder-agent/README.md).
-A local agent exchanges commands through a user-selected folder. The website
-remains static, and the shell still executes entirely in the browser.
-
 A minimal terminal running the [Strands Shell](https://github.com/strands-agents/shell)
 Rust core in a browser worker. Open the page and start typing. Commands, files,
 and variables stay in the tab; the server serves static assets.
