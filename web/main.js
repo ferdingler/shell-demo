@@ -84,7 +84,7 @@ function setState(value) {
 }
 
 async function showHelp() {
-  const description = 'Strands Shell is a Bourne-compatible shell that runs inside your own process. It includes grep, sed, jq, curl, find, and dozens of other commands without fork, exec, or raw system calls.'
+  const description = 'Strands Shell is a sandboxed, Bourne-compatible shell written in Rust. It includes grep, sed, jq, curl, find, and dozens of other commands without fork, exec, or raw system calls.'
   await editor.write([
     `${c.white}${wrapText(description, Math.min(72, term.cols))}${c.reset}`,
     '',
