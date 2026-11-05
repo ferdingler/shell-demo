@@ -21,7 +21,7 @@ const smallScreen = matchMedia('(max-width: 650px)')
 const term = new Terminal({
   allowProposedApi: true,
   fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-  fontSize: smallScreen.matches ? 13 : 14,
+  fontSize: smallScreen.matches ? 12 : 13,
   fontWeight: '400',
   fontWeightBold: '500',
   lineHeight: 1.2,
@@ -307,7 +307,7 @@ term.element.addEventListener('paste', event => {
 
 new ResizeObserver(() => editor.enqueue(async () => {
   const previousSize = `${term.cols}:${term.rows}`
-  const fontSize = smallScreen.matches ? 13 : 14
+  const fontSize = smallScreen.matches ? 12 : 13
   if (term.options.fontSize !== fontSize) term.options.fontSize = fontSize
   fit.fit()
   if (openingVisible && state !== 'failed' && previousSize !== `${term.cols}:${term.rows}`) {
