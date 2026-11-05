@@ -9,6 +9,7 @@ export function createFolderAgent({ execute, cancel, focus }) {
   const status = document.querySelector('#agent-status')
   const connected = document.querySelector('#agent-connected')
   const prompt = document.querySelector('#agent-prompt')
+  const folderAccessSupported = typeof window.showDirectoryPicker === 'function'
   let selected
   let selecting = false
   const mailbox = new FolderMailbox({
@@ -61,8 +62,11 @@ export function createFolderAgent({ execute, cancel, focus }) {
     drop.dataset.dragging = 'false'
     // Obtain the promise synchronously while the drag data is still available.
     const item = [...event.dataTransfer.items].find(item => item.kind === 'file')
-    const handle = item?.getAsFileSystemHandle?.()
-    try { await select(await handle) } catch (error) { showError(error) }
+    try {
+      await select(await item?.getAsFileSystemHandle?.())
+    } catch (error) {
+      status.textContent = error.message || 'Could not read the dropped folder. Try “choose a folder” instead.'
+    }
   })
   allow.addEventListener('click', async () => {
     if (!selected || selecting) return
@@ -86,9 +90,11 @@ export function createFolderAgent({ execute, cancel, focus }) {
   document.querySelector('#agent-close').addEventListener('click', () => dialog.close())
   dialog.addEventListener('close', focus)
   window.addEventListener('pagehide', () => void mailbox.disconnect(false))
-  if (!('showDirectoryPicker' in window)) {
+  if (!folderAccessSupported) {
+    drop.hidden = true
     choose.disabled = true
-    status.textContent = 'Folder connections require desktop Chrome or Edge.'
+    status.setAttribute('role', 'alert')
+    status.textContent = 'This browser cannot connect to a local folder. Open this page in desktop Chrome or Edge to use an agent.'
   }
   return mailbox
 }
