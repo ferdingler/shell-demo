@@ -47,9 +47,6 @@ EOF
 `
 
 try {
-  if (!WebAssembly.Suspending || !WebAssembly.promising) {
-    throw new Error('This shell needs WebAssembly JSPI. Open it in a current Chrome or Edge browser.')
-  }
   const { execute } = await import('./generated/shell.js')
   const result = await execute(seed)
   if (result.status !== 0 || result.stderr) {

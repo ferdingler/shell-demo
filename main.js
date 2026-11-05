@@ -5,6 +5,7 @@ import { LineEditor } from './line-editor.js'
 import { intro } from './intro.js'
 import { complete } from './completion.js'
 import { connectAgent, readPairing } from './agent-link.js'
+import { LimitError, ResetError, createSession } from './session.js'
 import { colors as c, displayPath, plainText, terminalText, wrapText } from './terminal-text.js'
 import './style.css'
 
@@ -51,14 +52,14 @@ term.textarea.setAttribute('enterkeyhint', 'send')
 await document.fonts.ready
 fit.fit()
 
-let worker
-let timer
+const session = createSession({
+  createWorker: () => new Worker(new URL('./worker.js', import.meta.url), { type: 'module' }),
+})
+// Bumped by every restart, so work queued for an older engine is dropped.
 let generation = 0
 let state = 'loading'
 let cwd = '/home/lash/workspace'
 let files = []
-let nextId = 0
-let activeId = 0
 let completed = 0
 let openingVisible = false
 // Commands from a paired local agent; they run one at a time when the shell is idle.
@@ -141,24 +142,54 @@ async function run(command) {
     dialog.showModal()
     return prompt()
   }
-  dispatch(command)
+  execute(command)
 }
 
-function dispatch(command) {
+// Runs a command in the engine and shows the result; `job` is the agent
+// command it answers, if any. Not awaited: the editor stays responsive.
+async function execute(command, job = null) {
+  const current = generation
   setState('busy')
   result.textContent = ''
-  activeId = ++nextId
-  worker.postMessage({ id: activeId, command })
-  const current = generation
-  timer = setTimeout(() => {
+  let data
+  try {
+    data = await session.run(command)
+  } catch (error) {
+    if (error instanceof LimitError) return startSession(`${error.message} The workspace was reset.`)
+    if (error instanceof ResetError) return // a stop or new session already took over
+    return fail(error.message)
+  }
+  editor.enqueue(async () => {
     if (current !== generation) return
-    startSession('5-second limit reached. The workspace was reset.')
-  }, 5000)
+    cwd = data.cwd || cwd
+    files = data.files || files
+    await output(data.stdout)
+    await output(data.stderr, c.red)
+    if (data.status !== 0) await output(`exit ${data.status}`, c.muted)
+    completed++
+    result.textContent = `${data.status === 0 ? '' : `exit ${data.status} · `}${data.elapsed < 1000 ? `${Math.round(data.elapsed)} ms` : `${(data.elapsed / 1000).toFixed(1)} s`}`
+    result.dataset.failed = String(data.status !== 0)
+    if (job) {
+      agent.reply(job.id, data)
+      agentJob = null
+    }
+    await settle()
+  })
+}
+
+// Shows the prompt once the shell is idle, restoring the human's draft after
+// the agent's commands are done.
+async function settle() {
+  await prompt()
+  if (!agentJob && agentDraft !== null && !agent?.pending) {
+    await editor.replace(agentDraft)
+    agentDraft = null
+  }
+  if (!dialog.open) term.focus()
 }
 
 function fail(message) {
-  clearTimeout(timer)
-  worker?.terminate()
+  session.stop()
   editor.active = false
   failure = message
   setState('failed')
@@ -169,8 +200,6 @@ function fail(message) {
 
 function startSession(message, clear = false) {
   const current = ++generation
-  clearTimeout(timer)
-  worker?.terminate()
   editor.active = false
   openingVisible = false
   failure = ''
@@ -190,45 +219,14 @@ function startSession(message, clear = false) {
     }
     if (message) await output(message + '\n', c.muted)
   })
-  if (!globalThis.WebAssembly?.Suspending || !WebAssembly.promising) {
-    fail('This shell needs WebAssembly JSPI. Open it in a current Chrome or Edge browser.')
-    return
-  }
-  const session = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' })
-  worker = session
-  timer = setTimeout(() => fail('The shell took too long to start.'), 30000)
-  session.onmessage = ({ data }) => {
+  session.start().then(ready => editor.enqueue(async () => {
     if (current !== generation) return
-    if (data.type === 'result' && data.id !== activeId) return
-    clearTimeout(timer)
-    if (data.type === 'fatal') return fail(data.message)
-    editor.enqueue(async () => {
-      if (current !== generation) return
-      cwd = data.cwd || cwd
-      files = data.files || files
-      if (data.type === 'result') {
-        await output(data.stdout)
-        await output(data.stderr, c.red)
-        if (data.status !== 0) await output(`exit ${data.status}`, c.muted)
-        completed++
-        result.textContent = `${data.status === 0 ? '' : `exit ${data.status} · `}${data.elapsed < 1000 ? `${Math.round(data.elapsed)} ms` : `${(data.elapsed / 1000).toFixed(1)} s`}`
-        result.dataset.failed = String(data.status !== 0)
-        if (agentJob?.workerId === data.id) {
-          agent.reply(agentJob.id, data)
-          agentJob = null
-        }
-      }
-      await prompt()
-      if (!agentJob && agentDraft !== null && !agent?.pending) {
-        await editor.replace(agentDraft)
-        agentDraft = null
-      }
-      if (!dialog.open) term.focus()
-    })
-  }
-  session.onerror = event => {
-    if (current === generation) fail(event.message || 'Could not load the shell engine.')
-  }
+    cwd = ready.cwd || cwd
+    files = ready.files || files
+    await settle()
+  }), error => {
+    if (current === generation && !(error instanceof ResetError)) fail(error.message)
+  })
 }
 
 function interrupt() {
@@ -263,8 +261,7 @@ function pumpAgent() {
     await editor.replace(plainText(agentJob.command))
     await editor.write('\r\n')
     editor.active = false
-    agentJob.workerId = nextId + 1
-    dispatch(agentJob.command)
+    execute(agentJob.command, agentJob)
   })
 }
 
@@ -330,10 +327,7 @@ new ResizeObserver(() => editor.enqueue(async () => {
 reducedMotion.addEventListener('change', () => {
   term.options.cursorBlink = !reducedMotion.matches
 })
-window.addEventListener('pagehide', () => {
-  clearTimeout(timer)
-  worker?.terminate()
-})
+window.addEventListener('pagehide', () => session.stop())
 
 startSession(undefined, true)
 term.focus()
