@@ -22,33 +22,25 @@
 //   bridge -> page  {type:'run', id, command}
 //   page -> bridge  {type:'result', id, stdout, stderr, status, cwd}
 //   page -> bridge  {type:'error', id, message}   (the tab cannot run commands)
+//
+// The module also exports its parts (Socket, createBridge) for tests; it only
+// starts listening when run as a script.
 
 import { createServer } from 'node:http'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import { spawn } from 'node:child_process'
+import { realpathSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 
-const { values: args } = parseArgs({
-  options: {
-    port: { type: 'string', default: '7357' },
-    'page-url': { type: 'string', default: 'https://tryshell.sh/' },
-    origin: { type: 'string', multiple: true, default: [] },
-    open: { type: 'boolean', default: false },
-  },
-})
-const port = Number(args.port)
-const pageUrl = new URL(args['page-url'])
-const origins = new Set([pageUrl.origin, ...args.origin.map(origin => new URL(origin).origin)])
-const token = randomBytes(24).toString('base64url')
-pageUrl.hash = `pair=${token}${port === 7357 ? '' : `&port=${port}`}`
-const pairingUrl = pageUrl.href
-const callTimeout = 10000
-const log = (...parts) => console.error('[bridge]', ...parts)
+export const defaultPort = 7357
 
 // ---- Minimal WebSocket server (RFC 6455, server side, small text frames) ----
 
-class Socket {
+// Wraps an upgraded stream. Accepts only masked, unfragmented frames up to
+// 1 MiB, which is all a browser sends for small JSON messages.
+export class Socket {
   constructor(stream) {
     this.stream = stream
     this.buffer = Buffer.alloc(0)
@@ -124,110 +116,7 @@ class Socket {
   }
 }
 
-// ---- Page pairing and command dispatch ----
-
-let page = null
-let nextId = 0
-const pending = new Map()
-
-function tokenMatches(candidate) {
-  const a = Buffer.from(String(candidate))
-  const b = Buffer.from(token)
-  return a.length === b.length && timingSafeEqual(a, b)
-}
-
-function accept(socket) {
-  let paired = false
-  const helloTimer = setTimeout(() => socket.close(4001, 'pairing timeout'), 5000)
-  socket.onmessage = text => {
-    let message
-    try { message = JSON.parse(text) } catch { return socket.close(1007, 'invalid JSON') }
-    if (!paired) {
-      clearTimeout(helloTimer)
-      if (message?.type !== 'hello' || !tokenMatches(message.token)) {
-        log('rejected a page with a wrong pairing token')
-        return socket.close(4001, 'invalid pairing token')
-      }
-      paired = true
-      if (page) page.close(4000, 'replaced by a newer page')
-      page = socket
-      socket.send({ type: 'paired' })
-      log('page connected')
-      return
-    }
-    if ((message?.type === 'result' || message?.type === 'error') && pending.has(message.id)) {
-      const call = pending.get(message.id)
-      pending.delete(message.id)
-      clearTimeout(call.timer)
-      if (message.type === 'error') call.reject(new Error(String(message.message)))
-      else call.resolve(message)
-    }
-  }
-  socket.onclose = () => {
-    clearTimeout(helloTimer)
-    if (page !== socket) return
-    page = null
-    log('page disconnected')
-    for (const [id, call] of pending) {
-      clearTimeout(call.timer)
-      call.reject(new Error('The browser tab disconnected before the command finished.'))
-      pending.delete(id)
-    }
-  }
-}
-
-function runInPage(command) {
-  return new Promise((resolve, reject) => {
-    if (!page) return reject(new Error(`No browser tab is connected. Ask the user to open this pairing URL in Chrome or Edge: ${pairingUrl}`))
-    const id = ++nextId
-    const timer = setTimeout(() => {
-      pending.delete(id)
-      reject(new Error(`The command did not finish within ${callTimeout / 1000}s.`))
-    }, callTimeout)
-    pending.set(id, { resolve, reject, timer })
-    page.send({ type: 'run', id, command })
-  })
-}
-
-const server = createServer((request, response) => {
-  response.writeHead(426, { 'content-type': 'text/plain' }).end('Strands Shell agent bridge: WebSocket only.\n')
-})
-server.on('upgrade', (request, stream) => {
-  const origin = request.headers.origin
-  const key = request.headers['sec-websocket-key']
-  if (!origins.has(origin) || !key || request.headers.upgrade?.toLowerCase() !== 'websocket') {
-    log(`rejected a connection from origin ${origin ?? '(none)'}`)
-    stream.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
-    return
-  }
-  const acceptKey = createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64')
-  stream.write([
-    'HTTP/1.1 101 Switching Protocols',
-    'Upgrade: websocket',
-    'Connection: Upgrade',
-    `Sec-WebSocket-Accept: ${acceptKey}`,
-    '', '',
-  ].join('\r\n'))
-  accept(new Socket(stream))
-})
-server.on('error', error => {
-  log(`could not listen on 127.0.0.1:${port}: ${error.message}`)
-  process.exit(1)
-})
-server.listen(port, '127.0.0.1', () => {
-  log(`listening on ws://127.0.0.1:${port}`)
-  log(`allowed origins: ${[...origins].join(', ')}`)
-  log(`pairing URL: ${pairingUrl}`)
-  if (args.open) {
-    const [command, ...rest] = process.platform === 'darwin' ? ['open']
-      : process.platform === 'win32' ? ['cmd', '/c', 'start', '""'] : ['xdg-open']
-    spawn(command, [...rest, pairingUrl], { stdio: 'ignore', detached: true })
-      .on('error', error => log(`could not open a browser: ${error.message}`))
-      .unref()
-  }
-})
-
-// ---- MCP over stdio (newline-delimited JSON-RPC 2.0) ----
+// ---- MCP tool definitions ----
 
 const tools = [
   {
@@ -257,7 +146,7 @@ const protocolVersions = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'
 // Keep tool results small enough for an agent's context: the start and end of
 // long output survive, with a note saying how much was dropped.
 const outputLimit = 16000
-function clip(value = '') {
+export function clip(value = '') {
   if (value.length <= outputLimit) return value
   const head = value.slice(0, outputLimit * 0.75)
   const tail = value.slice(-outputLimit * 0.25)
@@ -265,67 +154,222 @@ function clip(value = '') {
 }
 
 const text = (value, isError = false) => ({ content: [{ type: 'text', text: value }], isError })
+const rpcResult = (id, result) => ({ jsonrpc: '2.0', id, result })
+const rpcError = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, message } })
 
-async function callTool(name, input) {
-  if (name === 'pairing_url') {
-    return text(`${pairingUrl}\n${page ? 'A browser tab is connected.' : 'No browser tab is connected yet.'}`)
+// ---- The bridge: one paired page, MCP requests in, page commands out ----
+
+// Everything except I/O wiring: pairing, the page protocol, and MCP handling.
+// `handleLine` takes one line of MCP input and resolves to the reply (or null).
+export function createBridge({
+  pageUrl = 'https://tryshell.sh/',
+  origins = [],
+  token = randomBytes(24).toString('base64url'),
+  callTimeout = 10000,
+  log = () => {},
+} = {}) {
+  const allowed = new Set([new URL(pageUrl).origin, ...origins.map(origin => new URL(origin).origin)])
+  let port = defaultPort
+  let page = null
+  let nextId = 0
+  const pending = new Map()
+
+  function pairingUrl() {
+    const url = new URL(pageUrl)
+    url.hash = `pair=${token}${port === defaultPort ? '' : `&port=${port}`}`
+    return url.href
   }
-  if (name !== 'run_shell') throw Object.assign(new Error(`Unknown tool: ${name}`), { code: -32602 })
-  if (typeof input?.command !== 'string') throw Object.assign(new Error('command must be a string'), { code: -32602 })
-  try {
-    const result = await runInPage(input.command)
-    return text([
-      `exit status: ${result.status}`,
-      `cwd: ${result.cwd}`,
-      `stdout:\n${clip(result.stdout)}`,
-      `stderr:\n${clip(result.stderr)}`,
-    ].join('\n'))
-  } catch (error) {
-    return text(error.message, true)
+
+  function tokenMatches(candidate) {
+    const a = Buffer.from(String(candidate))
+    const b = Buffer.from(token)
+    return a.length === b.length && timingSafeEqual(a, b)
   }
-}
 
-function reply(id, result) {
-  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n')
-}
-
-function replyError(id, code, message) {
-  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } }) + '\n')
-}
-
-async function handle(message) {
-  const { id, method, params } = message
-  const isRequest = id !== undefined && id !== null
-  try {
-    switch (method) {
-      case 'initialize':
-        return reply(id, {
-          protocolVersion: protocolVersions.includes(params?.protocolVersion) ? params.protocolVersion : protocolVersions[0],
-          capabilities: { tools: {} },
-          serverInfo: { name: 'strands-shell-bridge', version: '0.1.0' },
-          instructions: `Runs commands in the Strands Shell sandbox in the user's browser. If no tab is connected, give the user this URL: ${pairingUrl}`,
-        })
-      case 'ping':
-        return reply(id, {})
-      case 'tools/list':
-        return reply(id, { tools })
-      case 'tools/call':
-        return reply(id, await callTool(params?.name, params?.arguments))
-      default:
-        if (isRequest) replyError(id, -32601, `Method not found: ${method}`)
+  // Takes a Socket (or anything with send/close/onmessage/onclose) whose
+  // origin was already checked, and pairs it once it presents the token.
+  function accept(socket) {
+    let paired = false
+    const helloTimer = setTimeout(() => socket.close(4001, 'pairing timeout'), 5000)
+    socket.onmessage = data => {
+      let message
+      try { message = JSON.parse(data) } catch { return socket.close(1007, 'invalid JSON') }
+      if (!paired) {
+        clearTimeout(helloTimer)
+        if (message?.type !== 'hello' || !tokenMatches(message.token)) {
+          log('rejected a page with a wrong pairing token')
+          return socket.close(4001, 'invalid pairing token')
+        }
+        paired = true
+        if (page) page.close(4000, 'replaced by a newer page')
+        page = socket
+        socket.send({ type: 'paired' })
+        log('page connected')
+        return
+      }
+      if ((message?.type === 'result' || message?.type === 'error') && pending.has(message.id)) {
+        const call = pending.get(message.id)
+        pending.delete(message.id)
+        clearTimeout(call.timer)
+        if (message.type === 'error') call.reject(new Error(String(message.message)))
+        else call.resolve(message)
+      }
     }
-  } catch (error) {
-    if (isRequest) replyError(id, error.code || -32603, error.message)
+    socket.onclose = () => {
+      clearTimeout(helloTimer)
+      if (page !== socket) return
+      page = null
+      log('page disconnected')
+      for (const [id, call] of pending) {
+        clearTimeout(call.timer)
+        call.reject(new Error('The browser tab disconnected before the command finished.'))
+        pending.delete(id)
+      }
+    }
+  }
+
+  // Completes the WebSocket handshake for an allowed origin, or refuses it.
+  function upgrade(request, stream) {
+    const origin = request.headers.origin
+    const key = request.headers['sec-websocket-key']
+    if (!allowed.has(origin) || !key || request.headers.upgrade?.toLowerCase() !== 'websocket') {
+      log(`rejected a connection from origin ${origin ?? '(none)'}`)
+      stream.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
+      return
+    }
+    const acceptKey = createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64')
+    stream.write([
+      'HTTP/1.1 101 Switching Protocols',
+      'Upgrade: websocket',
+      'Connection: Upgrade',
+      `Sec-WebSocket-Accept: ${acceptKey}`,
+      '', '',
+    ].join('\r\n'))
+    accept(new Socket(stream))
+  }
+
+  function runInPage(command) {
+    return new Promise((resolve, reject) => {
+      if (!page) return reject(new Error(`No browser tab is connected. Ask the user to open this pairing URL in Chrome or Edge: ${pairingUrl()}`))
+      const id = ++nextId
+      const timer = setTimeout(() => {
+        pending.delete(id)
+        reject(new Error(`The command did not finish within ${callTimeout / 1000}s.`))
+      }, callTimeout)
+      pending.set(id, { resolve, reject, timer })
+      page.send({ type: 'run', id, command })
+    })
+  }
+
+  async function callTool(name, input) {
+    if (name === 'pairing_url') {
+      return text(`${pairingUrl()}\n${page ? 'A browser tab is connected.' : 'No browser tab is connected yet.'}`)
+    }
+    if (name !== 'run_shell') throw Object.assign(new Error(`Unknown tool: ${name}`), { code: -32602 })
+    if (typeof input?.command !== 'string') throw Object.assign(new Error('command must be a string'), { code: -32602 })
+    try {
+      const result = await runInPage(input.command)
+      return text([
+        `exit status: ${result.status}`,
+        `cwd: ${result.cwd}`,
+        `stdout:\n${clip(result.stdout)}`,
+        `stderr:\n${clip(result.stderr)}`,
+      ].join('\n'))
+    } catch (error) {
+      return text(error.message, true)
+    }
+  }
+
+  async function handle({ id, method, params }) {
+    const isRequest = id !== undefined && id !== null
+    try {
+      switch (method) {
+        case 'initialize':
+          return rpcResult(id, {
+            protocolVersion: protocolVersions.includes(params?.protocolVersion) ? params.protocolVersion : protocolVersions[0],
+            capabilities: { tools: {} },
+            serverInfo: { name: 'strands-shell-bridge', version: '0.1.0' },
+            instructions: `Runs commands in the Strands Shell sandbox in the user's browser. If no tab is connected, give the user this URL: ${pairingUrl()}`,
+          })
+        case 'ping':
+          return rpcResult(id, {})
+        case 'tools/list':
+          return rpcResult(id, { tools })
+        case 'tools/call':
+          return rpcResult(id, await callTool(params?.name, params?.arguments))
+        default:
+          return isRequest ? rpcError(id, -32601, `Method not found: ${method}`) : null
+      }
+    } catch (error) {
+      return isRequest ? rpcError(id, error.code || -32603, error.message) : null
+    }
+  }
+
+  async function handleLine(line) {
+    if (!line.trim()) return null
+    let message
+    try { message = JSON.parse(line) } catch { return rpcError(null, -32700, 'Parse error') }
+    if (message?.jsonrpc !== '2.0' || typeof message.method !== 'string') {
+      // Stray responses are ignored; anything else with an id is invalid.
+      const isResponse = message && ('result' in message || 'error' in message)
+      return message?.id !== undefined && !isResponse ? rpcError(message.id ?? null, -32600, 'Invalid request') : null
+    }
+    return handle(message)
+  }
+
+  return {
+    accept,
+    upgrade,
+    handleLine,
+    pairingUrl,
+    origins: () => [...allowed],
+    get connected() { return page !== null },
+    set port(value) { port = value },
   }
 }
 
-createInterface({ input: process.stdin }).on('line', line => {
-  if (!line.trim()) return
-  let message
-  try { message = JSON.parse(line) } catch { return replyError(null, -32700, 'Parse error') }
-  if (message?.jsonrpc !== '2.0' || typeof message.method !== 'string') {
-    if (message?.id !== undefined && !('result' in message) && !('error' in message)) replyError(message.id ?? null, -32600, 'Invalid request')
-    return
-  }
-  handle(message)
-}).on('close', () => process.exit(0))
+// ---- Script entry point: WebSocket on 127.0.0.1, MCP on stdio ----
+
+function main() {
+  const { values: args } = parseArgs({
+    options: {
+      port: { type: 'string', default: String(defaultPort) },
+      'page-url': { type: 'string', default: 'https://tryshell.sh/' },
+      origin: { type: 'string', multiple: true, default: [] },
+      open: { type: 'boolean', default: false },
+    },
+  })
+  const log = (...parts) => console.error('[bridge]', ...parts)
+  const port = Number(args.port)
+  const bridge = createBridge({ pageUrl: args['page-url'], origins: args.origin, log })
+  bridge.port = port
+
+  const server = createServer((request, response) => {
+    response.writeHead(426, { 'content-type': 'text/plain' }).end('Strands Shell agent bridge: WebSocket only.\n')
+  })
+  server.on('upgrade', bridge.upgrade)
+  server.on('error', error => {
+    log(`could not listen on 127.0.0.1:${port}: ${error.message}`)
+    process.exit(1)
+  })
+  server.listen(port, '127.0.0.1', () => {
+    log(`listening on ws://127.0.0.1:${port}`)
+    log(`allowed origins: ${bridge.origins().join(', ')}`)
+    log(`pairing URL: ${bridge.pairingUrl()}`)
+    if (args.open) {
+      const [command, ...rest] = process.platform === 'darwin' ? ['open']
+        : process.platform === 'win32' ? ['cmd', '/c', 'start', '""'] : ['xdg-open']
+      spawn(command, [...rest, bridge.pairingUrl()], { stdio: 'ignore', detached: true })
+        .on('error', error => log(`could not open a browser: ${error.message}`))
+        .unref()
+    }
+  })
+
+  // MCP over stdio: newline-delimited JSON-RPC 2.0. Only replies go to stdout.
+  createInterface({ input: process.stdin }).on('line', async line => {
+    const reply = await bridge.handleLine(line)
+    if (reply) process.stdout.write(JSON.stringify(reply) + '\n')
+  }).on('close', () => process.exit(0))
+}
+
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) main()
