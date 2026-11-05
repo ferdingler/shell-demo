@@ -28,10 +28,19 @@ createInterface({ input: bridge.stdout }).on('line', line => {
   waiting.get(message.id)?.(message)
   waiting.delete(message.id)
 })
-function rpc(method, params) {
+function rpc(method, params, timeout = 20000) {
   const id = ++nextId
   bridge.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
-  return new Promise(resolve => waiting.set(id, resolve))
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      waiting.delete(id)
+      reject(new Error(`${method} got no reply within ${timeout / 1000}s`))
+    }, timeout)
+    waiting.set(id, message => {
+      clearTimeout(timer)
+      resolve(message)
+    })
+  })
 }
 const runShell = command => rpc('tools/call', { name: 'run_shell', arguments: { command } }).then(m => m.result)
 
