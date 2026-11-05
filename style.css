@@ -46,6 +46,8 @@ h1 { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight
 .product { color: var(--muted); font-weight: 400; }
 .titlebar-right { display: flex; gap: 27px; align-items: center; }
 .titlebar-right a { display: flex; padding: 10px 0 10px 10px; }
+#connect-agent { font-family: inherit; font-size: 11px; padding: 10px 0; white-space: nowrap; }
+#connect-agent[data-connected="true"] { color: var(--accent); }
 .session-state { display: flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .35px; color: var(--muted); }
 .state-dot { width: 5px; height: 5px; border-radius: 50%; background: #d7b779; }
 body[data-state="ready"] .state-dot { background: var(--accent); box-shadow: 0 0 8px #b5db9528; }
@@ -88,6 +90,16 @@ dialog p { color: #a7b1a9; font-size: 12px; line-height: 1.8; margin: 0 0 25px; 
 .dialog-actions { display: flex; justify-content: flex-end; gap: 23px; font-family: var(--font-mono); font-size: 11px; }
 .dialog-actions button { padding: 8px 0; }
 .dialog-actions .confirm { color: var(--accent); }
+#agent-dialog { width: 560px; max-height: calc(100dvh - 40px); }
+.agent-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; font-family: var(--font-mono); font-size: 11px; }
+#agent-close { font-size: 24px; }
+#agent-drop { display: flex; flex-direction: column; align-items: center; gap: 15px; padding: 32px; margin-bottom: 20px; border: 1px dashed #697561; border-radius: 3px; font-size: 13px; }
+#agent-drop[data-dragging="true"] { border-color: var(--accent); background: #253023; }
+#agent-choose, #agent-copy { color: var(--accent); font-size: 11px; }
+#agent-status { color: var(--accent); margin-bottom: 16px; }
+.agent-connect-action { font-family: var(--font-mono); font-size: 12px; padding: 10px 14px; border: 1px solid var(--accent); border-radius: 3px; color: var(--accent); }
+#agent-prompt { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 11px; line-height: 1.8; padding: 15px; border: 1px solid var(--line); background: #131615; }
+#agent-disconnect { font-family: var(--font-mono); font-size: 11px; }
 noscript { padding: 32px; color: #ed968c; }
 
 @keyframes pulse { 50% { opacity: .3; } }
@@ -99,6 +111,8 @@ noscript { padding: 32px; color: #ed968c; }
   h1 { font-size: 12px; gap: 8px; }
   .titlebar-right { gap: 14px; }
   .session-state { font-size: 9px; }
+  .titlebar-right:has(#connect-agent) .session-state { display: none; }
+  #connect-agent { font-size: 10px; }
   .terminal-region { padding: 20px 14px 8px; }
   .statusbar { padding: 0 16px; gap: 8px; min-height: 46px; }
   .shortcuts, .session-info { gap: 15px; }

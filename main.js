@@ -3,7 +3,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { LineEditor } from './line-editor.js'
 import { intro } from './intro.js'
-import { colors as c, displayPath, terminalText, wrapText } from './terminal-text.js'
+import { createFolderAgent } from './prototypes/folder-agent/client.js'
+import { colors as c, displayPath, plainText, terminalText, wrapText } from './terminal-text.js'
 import './style.css'
 
 const container = document.querySelector('#terminal')
@@ -58,6 +59,8 @@ let nextId = 0
 let activeId = 0
 let completed = 0
 let openingVisible = false
+let folderAgent
+let agentCommand
 
 const commands = 'alias awk basename cat cd chmod clear cp cut date dirname echo env exit export false find grep head help history jq ls lua mkdir mv printf pwd reset rm rmdir sed seq sleep sort source tail tee test touch tr true uname uniq unset wc which whoami xargs'.split(' ')
 const editor = new LineEditor(term, { submit: run, interrupt, complete })
@@ -145,6 +148,10 @@ async function run(command) {
     dialog.showModal()
     return prompt()
   }
+  executeCommand(command)
+}
+
+function executeCommand(command) {
   setState('busy')
   result.textContent = ''
   activeId = ++nextId
@@ -156,7 +163,33 @@ async function run(command) {
   }, 5000)
 }
 
+function executeAgent(command) {
+  return new Promise((resolve, reject) => {
+    editor.enqueue(async () => {
+      if (state !== 'ready' || dialog.open || agentCommand) {
+        reject(new Error('The terminal is busy. The command did not execute; retry with a new id.'))
+        return
+      }
+      const saved = { text: editor.text.join(''), cursor: editor.cursor }
+      agentCommand = { resolve, reject, saved }
+      openingVisible = false
+      await editor.replace('')
+      editor.active = false
+      await editor.write(`${c.muted}[agent] ${c.reset}${plainText(command)}\r\n`)
+      executeCommand(command)
+    }).catch(reject)
+  })
+}
+
+function rejectAgent(message) {
+  const pending = agentCommand
+  agentCommand = undefined
+  pending?.reject(new Error(message))
+}
+
 function fail(message) {
+  rejectAgent(message)
+  void folderAgent?.disconnect(false)
   clearTimeout(timer)
   worker?.terminate()
   editor.active = false
@@ -165,6 +198,8 @@ function fail(message) {
 }
 
 function startSession(message, clear = false) {
+  rejectAgent(message || 'The workspace was reset.')
+  void folderAgent?.disconnect(false)
   const current = ++generation
   clearTimeout(timer)
   worker?.terminate()
@@ -206,7 +241,18 @@ function startSession(message, clear = false) {
         result.textContent = `${data.status === 0 ? '' : `exit ${data.status} · `}${data.elapsed < 1000 ? `${Math.round(data.elapsed)} ms` : `${(data.elapsed / 1000).toFixed(1)} s`}`
         result.dataset.failed = String(data.status !== 0)
       }
+      const pending = agentCommand
+      agentCommand = undefined
       await prompt()
+      if (pending) {
+        await editor.replace(pending.saved.text)
+        editor.cursor = pending.saved.cursor
+        await editor.render()
+        pending.resolve({
+          stdout: data.stdout, stderr: data.stderr, status: data.status,
+          cwd: data.cwd, elapsed: data.elapsed,
+        })
+      }
       if (!dialog.open) term.focus()
     })
   }
@@ -288,5 +334,6 @@ window.addEventListener('pagehide', () => {
   worker?.terminate()
 })
 
+folderAgent = createFolderAgent({ execute: executeAgent, cancel: interrupt, focus: () => term.focus() })
 startSession(undefined, true)
 term.focus()
