@@ -7,6 +7,9 @@
 // Usage:
 //   node bridge.mjs [--port 7357] [--page-url https://tryshell.sh/] [--origin <origin>]... [--open]
 //
+// Without --port the bridge uses 7357, or any free port when 7357 is taken (for
+// example by another agent session); the pairing URL then names the port.
+//
 // Claude Code:
 //   claude mcp add tryshell -- node /path/to/bridge.mjs --page-url <url>
 //
@@ -333,26 +336,34 @@ export function createBridge({
 function main() {
   const { values: args } = parseArgs({
     options: {
-      port: { type: 'string', default: String(defaultPort) },
+      port: { type: 'string' },
       'page-url': { type: 'string', default: 'https://tryshell.sh/' },
       origin: { type: 'string', multiple: true, default: [] },
       open: { type: 'boolean', default: false },
     },
   })
   const log = (...parts) => console.error('[bridge]', ...parts)
-  const port = Number(args.port)
+  const requested = args.port === undefined ? defaultPort : Number(args.port)
   const bridge = createBridge({ pageUrl: args['page-url'], origins: args.origin, log })
-  bridge.port = port
 
   const server = createServer((request, response) => {
     response.writeHead(426, { 'content-type': 'text/plain' }).end('Strands Shell agent bridge: WebSocket only.\n')
   })
   server.on('upgrade', bridge.upgrade)
+  let fellBack = false
   server.on('error', error => {
-    log(`could not listen on 127.0.0.1:${port}: ${error.message}`)
+    if (error.code === 'EADDRINUSE' && args.port === undefined && !fellBack) {
+      log(`port ${requested} is in use; picking a free one`)
+      fellBack = true
+      return server.listen(0, '127.0.0.1')
+    }
+    log(`could not listen on 127.0.0.1:${requested}: ${error.message}`)
     process.exit(1)
   })
-  server.listen(port, '127.0.0.1', () => {
+  server.listen(requested, '127.0.0.1')
+  server.on('listening', () => {
+    const { port } = server.address()
+    bridge.port = port
     log(`listening on ws://127.0.0.1:${port}`)
     log(`allowed origins: ${bridge.origins().join(', ')}`)
     log(`pairing URL: ${bridge.pairingUrl()}`)

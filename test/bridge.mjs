@@ -2,7 +2,7 @@
 // stdio and pairs a real browser tab. Needs `npm run preview -- --port 4173`.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { request } from 'node:http'
+import { createServer, request } from 'node:http'
 import { mkdir } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import { chromium } from 'playwright'
@@ -57,6 +57,20 @@ function upgrade(fromOrigin) {
       .end()
   })
 }
+
+// Without --port, a busy default port falls back to a free one named in the URL.
+const blocker = createServer()
+await new Promise(resolve => blocker.once('error', resolve).listen(7357, '127.0.0.1', resolve))
+const fallback = spawn(process.execPath, ['bridge/bridge.mjs', '--page-url', `${origin}/`], { stdio: ['pipe', 'pipe', 'pipe'] })
+const fallbackUrl = await new Promise((resolve, reject) => {
+  createInterface({ input: fallback.stderr }).on('line', line => line.match(/pairing URL: (\S+)/) && resolve(line.split('pairing URL: ')[1]))
+  fallback.on('exit', code => reject(new Error(`fallback bridge exited with ${code}`)))
+})
+fallback.kill()
+blocker.close()
+assert.match(fallbackUrl, /#pair=[\w-]+&port=\d+$/)
+assert.doesNotMatch(fallbackUrl, /port=7357/)
+console.log('PASS a busy default port falls back to a free one')
 
 const browser = await chromium.launch({ executablePath: process.env.BROWSER_EXECUTABLE || undefined })
 try {

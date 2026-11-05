@@ -25,7 +25,7 @@ terminal at an `agent ›` prompt.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--port` | `7357` | WebSocket port on 127.0.0.1 |
+| `--port` | `7357` | WebSocket port on 127.0.0.1; without the flag, a busy 7357 falls back to a free port named in the pairing URL |
 | `--page-url` | `https://tryshell.sh/` | Page used to build the pairing URL |
 | `--origin` | none | Extra allowed page origin; repeatable |
 | `--open` | off | Open the pairing URL in the default browser |
