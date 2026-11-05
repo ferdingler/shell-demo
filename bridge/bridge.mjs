@@ -23,6 +23,7 @@
 //   page -> bridge  {type:'hello', token}
 //   bridge -> page  {type:'paired'}
 //   bridge -> page  {type:'run', id, command}
+//   bridge -> page  {type:'cancel', id}            (the call gave up; skip it if queued)
 //   page -> bridge  {type:'result', id, stdout, stderr, status, cwd}
 //   page -> bridge  {type:'error', id, message}   (the tab cannot run commands)
 //
@@ -257,7 +258,9 @@ export function createBridge({
       const id = ++nextId
       const timer = setTimeout(() => {
         pending.delete(id)
-        reject(new Error(`The command did not finish within ${callTimeout / 1000}s.`))
+        page?.send({ type: 'cancel', id })
+        reject(new Error(`The command did not finish within ${callTimeout / 1000}s. ` +
+          'If it had not started yet, it will not run.'))
       }, callTimeout)
       pending.set(id, { resolve, reject, timer })
       page.send({ type: 'run', id, command })

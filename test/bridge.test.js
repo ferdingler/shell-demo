@@ -159,6 +159,15 @@ test('a page error or disconnect fails the call with a message', async () => {
   assert.match((await call('ls')).result.content[0].text, /No browser tab is connected.*#pair=t/)
 })
 
+test('a call that times out tells the page to skip it', async () => {
+  const bridge = createBridge({ token: 't', callTimeout: 20 })
+  const page = fakePage(bridge, 't')
+  const { result } = await rpc(bridge, { id: 1, method: 'tools/call', params: { name: 'run_shell', arguments: { command: 'sleep 9' } } })
+  assert.equal(result.isError, true)
+  assert.match(result.content[0].text, /did not finish/)
+  assert.deepEqual(page.sent.at(-1), { type: 'cancel', id: page.sent[1].id })
+})
+
 test('long output keeps its start and end', () => {
   assert.equal(clip('short'), 'short')
   const clipped = clip('a'.repeat(20000) + 'END')

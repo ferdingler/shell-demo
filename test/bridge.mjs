@@ -125,6 +125,14 @@ try {
   assert.match(afterDialog.content[0].text, /stdout:\nafter-dialog\n/)
   console.log('PASS agent command queued behind the reset dialog runs once it closes')
 
+  await page.click('#reset')
+  const timedOut = await runShell('echo ran > cancelled.txt')
+  assert.match(timedOut.content[0].text, /did not finish/)
+  await page.click('#reset-dialog button[value="cancel"]')
+  await page.waitForTimeout(300)
+  assert.doesNotMatch((await runShell('ls')).content[0].text, /cancelled\.txt/)
+  console.log('PASS a command that timed out while queued never runs')
+
   const screen = await page.locator('.xterm-rows').innerText()
   assert.match(screen, /agent › ~\/workspace ❯ echo hi \| tr a-z A-Z/)
   await mkdir('test-results', { recursive: true })

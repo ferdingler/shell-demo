@@ -284,6 +284,10 @@ function connectAgent(token, port) {
   socket.onmessage = ({ data }) => {
     const message = JSON.parse(data)
     if (message.type === 'paired') setAgentStatus('connected')
+    if (message.type === 'cancel') {
+      const index = agentQueue.findIndex(job => job.id === message.id)
+      if (index >= 0) agentQueue.splice(index, 1)
+    }
     if (message.type === 'run' && typeof message.command === 'string') {
       if (state === 'failed') return refuseAgent(message.id)
       agentQueue.push({ id: message.id, command: message.command })

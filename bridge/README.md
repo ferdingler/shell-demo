@@ -54,6 +54,7 @@ JSON text frames over `ws://127.0.0.1:<port>`:
 page   -> bridge  {type:'hello', token}
 bridge -> page    {type:'paired'}
 bridge -> page    {type:'run', id, command}
+bridge -> page    {type:'cancel', id}               the call timed out; skip it if still queued
 page   -> bridge  {type:'result', id, stdout, stderr, status, cwd}
 page   -> bridge  {type:'error', id, message}   the tab cannot run commands
 ```
