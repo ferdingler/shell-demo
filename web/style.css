@@ -45,7 +45,7 @@ h1 { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight
 .slash { color: #515d54; font-weight: 400; }
 .product { color: var(--muted); font-weight: 400; }
 .titlebar-right { display: flex; gap: 27px; align-items: center; }
-.titlebar-right a { display: flex; padding: 10px 0 10px 10px; }
+.titlebar-right a { display: flex; gap: 4px; padding: 10px 0 10px 10px; font-size: 10px; letter-spacing: .35px; text-decoration: none; }
 .session-state { display: flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .35px; color: var(--muted); }
 .state-dot { width: 5px; height: 5px; border-radius: 50%; background: #d7b779; }
 body[data-state="ready"] .state-dot { background: var(--accent); box-shadow: 0 0 8px #b5db9528; }
