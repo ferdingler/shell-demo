@@ -75,6 +75,7 @@ try {
   console.log('PASS run_shell without a tab asks for pairing')
 
   assert.equal(await upgrade('https://evil.example'), 403)
+  assert.equal(await upgrade('http://localhost:5173'), 403, 'other local dev servers cannot pair')
   assert.equal(await upgrade(origin), 101)
   console.log('PASS wrong Origin rejected (403), allowed Origin upgrades (101)')
 

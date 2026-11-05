@@ -385,6 +385,7 @@ term.focus()
 const pairing = new URLSearchParams(location.hash.slice(1))
 if (pairing.get('pair')) {
   history.replaceState(null, '', location.pathname + location.search)
-  const port = Number(pairing.get('port')) || 7357
+  const requested = Number(pairing.get('port'))
+  const port = Number.isInteger(requested) && requested >= 1024 && requested <= 65535 ? requested : 7357
   connectAgent(pairing.get('pair'), port)
 }

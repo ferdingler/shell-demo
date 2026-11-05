@@ -8,12 +8,13 @@
 //   node bridge.mjs [--port 7357] [--page-url https://tryshell.sh/] [--origin <origin>]... [--open]
 //
 // Claude Code:
-//   claude mcp add tryshell -- node /path/to/bridge.mjs --page-url <url> --origin <origin>
+//   claude mcp add tryshell -- node /path/to/bridge.mjs --page-url <url>
 //
 // On start the bridge prints a pairing URL (<page-url>#pair=<token>) to stderr.
 // Open it in Chrome or Edge, or ask the agent to call the `pairing_url` tool.
 // The WebSocket listens on 127.0.0.1 only and accepts a page only when its
-// Origin is allowlisted and its first message carries the pairing token.
+// Origin is the page URL's origin (or an extra --origin) and its first message
+// carries the pairing token.
 //
 // Page protocol (JSON text frames):
 //   page -> bridge  {type:'hello', token}
@@ -37,14 +38,9 @@ const { values: args } = parseArgs({
   },
 })
 const port = Number(args.port)
-const origins = new Set([
-  'https://tryshell.sh',
-  'http://127.0.0.1:4173', 'http://localhost:4173',
-  'http://127.0.0.1:5173', 'http://localhost:5173',
-  ...args.origin.map(origin => origin.replace(/\/$/, '')),
-])
-const token = randomBytes(24).toString('base64url')
 const pageUrl = new URL(args['page-url'])
+const origins = new Set([pageUrl.origin, ...args.origin.map(origin => new URL(origin).origin)])
+const token = randomBytes(24).toString('base64url')
 pageUrl.hash = `pair=${token}${port === 7357 ? '' : `&port=${port}`}`
 const pairingUrl = pageUrl.href
 const callTimeout = 10000

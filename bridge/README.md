@@ -16,7 +16,7 @@ claude mcp add tryshell -- node /path/to/bridge.mjs --page-url https://tryshell.
 For a local preview:
 
 ```sh
-claude mcp add tryshell -- node /path/to/bridge.mjs --page-url http://127.0.0.1:4173/ --origin http://127.0.0.1:4173
+claude mcp add tryshell -- node /path/to/bridge.mjs --page-url http://127.0.0.1:4173/
 ```
 
 Ask the agent for the pairing URL (the `pairing_url` tool), open it in Chrome or
@@ -27,11 +27,11 @@ terminal at an `agent ›` prompt.
 | --- | --- | --- |
 | `--port` | `7357` | WebSocket port on 127.0.0.1 |
 | `--page-url` | `https://tryshell.sh/` | Page used to build the pairing URL |
-| `--origin` | (see below) | Extra allowed page origin; repeatable |
+| `--origin` | none | Extra allowed page origin; repeatable |
 | `--open` | off | Open the pairing URL in the default browser |
 
-Allowed origins by default: `https://tryshell.sh`, and `127.0.0.1`/`localhost`
-on ports 4173 and 5173.
+The bridge accepts pages only from the `--page-url` origin and any `--origin`
+flags, so other sites, including local dev servers, cannot pair.
 
 ## Tools
 
