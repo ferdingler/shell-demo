@@ -254,6 +254,10 @@ const tools = [
   },
 ]
 
+// MCP revisions this server implements, newest first. A client asking for one
+// gets it back; any other request gets the newest, and the client decides.
+const protocolVersions = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']
+
 const text = (value, isError = false) => ({ content: [{ type: 'text', text: value }], isError })
 
 async function callTool(name, input) {
@@ -290,7 +294,7 @@ async function handle(message) {
     switch (method) {
       case 'initialize':
         return reply(id, {
-          protocolVersion: params?.protocolVersion || '2025-06-18',
+          protocolVersion: protocolVersions.includes(params?.protocolVersion) ? params.protocolVersion : protocolVersions[0],
           capabilities: { tools: {} },
           serverInfo: { name: 'strands-shell-bridge', version: '0.1.0' },
           instructions: `Runs commands in the Strands Shell sandbox in the user's browser. If no tab is connected, give the user this URL: ${pairingUrl}`,

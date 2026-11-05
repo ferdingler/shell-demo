@@ -62,11 +62,12 @@ const browser = await chromium.launch({ executablePath: process.env.BROWSER_EXEC
 try {
   const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } })
   assert.equal(init.result.protocolVersion, '2025-06-18')
+  assert.equal((await rpc('initialize', { protocolVersion: '1999-01-01' })).result.protocolVersion, '2025-11-25')
   bridge.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n')
   const list = await rpc('tools/list')
   assert.deepEqual(list.result.tools.map(tool => tool.name), ['run_shell', 'pairing_url'])
   assert.equal((await rpc('nope')).error.code, -32601)
-  console.log('PASS initialize, tools/list, unknown method')
+  console.log('PASS initialize (version negotiation), tools/list, unknown method')
 
   const offline = await runShell('echo hi')
   assert.equal(offline.isError, true)
