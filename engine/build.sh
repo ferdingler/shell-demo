@@ -7,5 +7,5 @@ export AR_wasm32_wasip2="$WASI_SDK_PATH/bin/ar"
 export CFLAGS_wasm32_wasip2="--sysroot=$WASI_SDK_PATH/share/wasi-sysroot"
 cargo build --locked --target wasm32-wasip2 --release
 npx --no-install jco transpile target/wasm32-wasip2/release/strands_shell_demo.wasm \
-  --name shell --out-dir generated --no-nodejs-compat --bindgen-enable-wasm-exnref \
+  --name shell --out-dir ../web/generated --no-nodejs-compat --bindgen-enable-wasm-exnref \
   --async-mode jspi --async-wasi-imports --async-exports execute

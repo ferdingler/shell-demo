@@ -28,7 +28,9 @@ jobs:
           echo "WASI_SDK_PATH=$RUNNER_TEMP/wasi-sdk-34.0-x86_64-linux" >> "$GITHUB_ENV"
       - run: npm ci
       - run: cargo fmt --check
+        working-directory: engine
       - run: cargo clippy --all-targets --locked -- -D warnings
+        working-directory: engine
       - run: npm test
       - run: npm run build
       - run: npx --no-install playwright install --with-deps chromium

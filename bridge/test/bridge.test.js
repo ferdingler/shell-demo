@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import test from 'node:test'
-import { Socket, clip, createBridge } from '../bridge/bridge.mjs'
+import { Socket, clip, createBridge } from '../bridge.mjs'
 
 // A stand-in for an upgraded TCP stream that records what the socket writes.
 class Stream extends EventEmitter {

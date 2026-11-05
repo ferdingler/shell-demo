@@ -5,11 +5,13 @@ import { spawn } from 'node:child_process'
 import { createServer, request } from 'node:http'
 import { mkdir } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 
+const script = fileURLToPath(new URL('../bridge.mjs', import.meta.url))
 const origin = process.env.DEMO_ORIGIN || 'http://127.0.0.1:4173'
 const port = 7391
-const bridge = spawn(process.execPath, ['bridge/bridge.mjs', '--port', String(port), '--page-url', `${origin}/`], {
+const bridge = spawn(process.execPath, [script, '--port', String(port), '--page-url', `${origin}/`], {
   stdio: ['pipe', 'pipe', 'pipe'],
 })
 const pairingUrl = await new Promise((resolve, reject) => {
@@ -61,7 +63,7 @@ function upgrade(fromOrigin) {
 // Without --port, a busy default port falls back to a free one named in the URL.
 const blocker = createServer()
 await new Promise(resolve => blocker.once('error', resolve).listen(7357, '127.0.0.1', resolve))
-const fallback = spawn(process.execPath, ['bridge/bridge.mjs', '--page-url', `${origin}/`], { stdio: ['pipe', 'pipe', 'pipe'] })
+const fallback = spawn(process.execPath, [script, '--page-url', `${origin}/`], { stdio: ['pipe', 'pipe', 'pipe'] })
 const fallbackUrl = await new Promise((resolve, reject) => {
   createInterface({ input: fallback.stderr }).on('line', line => line.match(/pairing URL: (\S+)/) && resolve(line.split('pairing URL: ')[1]))
   fallback.on('exit', code => reject(new Error(`fallback bridge exited with ${code}`)))

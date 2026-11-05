@@ -79,3 +79,7 @@ prompt.
 
 With `npm run preview -- --port 4173` running, `npm run check:bridge` drives the
 bridge as an MCP client and pairs a headless Chromium tab.
+
+`test/bridge.test.js` covers WebSocket framing, pairing, and MCP handling
+without a browser and runs with `npm test`. `test/e2e.mjs` is the end-to-end
+check behind `npm run check:bridge`.

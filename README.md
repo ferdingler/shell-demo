@@ -6,12 +6,22 @@ and variables stay in the tab; the server serves static assets.
 
 ![The terminal](docs/terminal.png)
 
+## Layout
+
+| Folder | Contents |
+| --- | --- |
+| `engine/` | Rust adapter around the Strands Shell core, its WIT interface, and `build.sh`, which compiles it to WebAssembly for the site |
+| `web/` | The static site: terminal page, worker, and its tests |
+| `bridge/` | Local MCP bridge that lets an agent run commands in the page, and its tests |
+
+One `package.json` at the root holds the scripts and JavaScript dependencies.
+
 ## Build and run
 
 Install Node.js 22.12 or newer, [Rust](https://rustup.rs/), and
 [wasi-sdk 34](https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-34).
 Choose the SDK archive for your operating system and architecture, then unpack it.
-The repository's `rust-toolchain.toml` selects Rust 1.96 and the WebAssembly target.
+`engine/rust-toolchain.toml` selects Rust 1.96 and the WebAssembly target.
 
 ```sh
 npm ci
@@ -26,7 +36,7 @@ explanation in the terminal.
 
 After the first build, use `npm run dev` for frontend work or `npm run build:site`
 to rebuild just the site. Rebuild the engine with `npm run build:wasm` after changing
-Rust or the component interface in `wit/`.
+Rust or the component interface in `engine/wit/`.
 
 ## Use
 
@@ -80,8 +90,7 @@ Keep the preview server running on port 4173, then run these checks in another t
 
 ```sh
 npm test
-cargo fmt --check
-cargo clippy --all-targets --locked -- -D warnings
+(cd engine && cargo fmt --check && cargo clippy --all-targets --locked -- -D warnings)
 npx playwright install chromium
 npm run check:browser
 npm run check:bridge
@@ -100,7 +109,7 @@ Relative asset paths support hosting under a subdirectory. No backend is require
 ## Source
 
 The browser adapter derives from the Strands Shell browser-terminal prototype.
-`Cargo.toml` pins the upstream core to commit
+`engine/Cargo.toml` pins the upstream core to commit
 `1d1a0aae9cf04e524687d3ed582b727a4b397ce2`; no neighboring checkout is required.
 The adapter returns directory metadata for the prompt and completion without
 running an extra shell command or changing `$?`.
