@@ -114,6 +114,17 @@ try {
   await mkdir('test-results', { recursive: true })
   await page.screenshot({ path: 'test-results/agent-bridge.png' })
   console.log('PASS terminal shows agent commands (test-results/agent-bridge.png)')
+
+  const unsupported = await browser.newPage()
+  await unsupported.addInitScript(() => { delete WebAssembly.Suspending })
+  await unsupported.goto(pairingUrl)
+  await unsupported.waitForFunction(() => document.querySelector('#agent-status').dataset.state === 'connected')
+  const started = Date.now()
+  const refused = await runShell('echo hi')
+  assert.equal(refused.isError, true)
+  assert.match(refused.content[0].text, /unavailable: .*JSPI/)
+  assert.ok(Date.now() - started < 2000, 'refusal arrives without waiting for the timeout')
+  console.log('PASS a tab that cannot run the shell refuses agent commands right away')
 } finally {
   await browser.close()
   bridge.kill()

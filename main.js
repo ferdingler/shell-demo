@@ -64,6 +64,7 @@ let agentSocket
 const agentQueue = []
 let agentJob = null
 let agentDraft = null
+let failure = ''
 
 const commands = 'alias awk basename cat cd chmod clear cp cut date dirname echo env exit export false find grep head help history jq ls lua mkdir mv printf pwd reset rm rmdir sed seq sleep sort source tail tee test touch tr true uname uniq unset wc which whoami xargs'.split(' ')
 const editor = new LineEditor(term, { submit: run, interrupt, complete })
@@ -172,7 +173,10 @@ function fail(message) {
   clearTimeout(timer)
   worker?.terminate()
   editor.active = false
+  failure = message
   setState('failed')
+  for (const job of [agentJob, ...agentQueue.splice(0)]) if (job) refuseAgent(job.id)
+  agentJob = null
   editor.enqueue(() => output(`${message}\nUse “new session” to try again.`, c.red))
 }
 
@@ -182,6 +186,7 @@ function startSession(message, clear = false) {
   worker?.terminate()
   editor.active = false
   openingVisible = false
+  failure = ''
   setState('loading')
   result.textContent = ''
   cwd = '/home/lash/workspace'
@@ -258,6 +263,15 @@ function replyToAgent(id, { stdout, stderr, status, cwd }) {
   }
 }
 
+// Tell the agent right away when this tab cannot run commands, instead of
+// letting the call wait for the bridge's timeout.
+function refuseAgent(id) {
+  if (agentSocket?.readyState !== WebSocket.OPEN) return
+  const message = `The shell in the user's browser tab is unavailable: ${failure} ` +
+    'Ask the user to open the pairing URL in a current Chrome or Edge browser, or to start a new session.'
+  agentSocket.send(JSON.stringify({ type: 'error', id, message }))
+}
+
 // Run the next agent command through the same worker path as typed input,
 // echoed at a labeled prompt. The human's unfinished draft is restored after.
 function pumpAgent() {
@@ -284,6 +298,7 @@ function connectAgent(token, port) {
     const message = JSON.parse(data)
     if (message.type === 'paired') setAgentStatus('connected')
     if (message.type === 'run' && typeof message.command === 'string') {
+      if (state === 'failed') return refuseAgent(message.id)
       agentQueue.push({ id: message.id, command: message.command })
       pumpAgent()
     }

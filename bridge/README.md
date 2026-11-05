@@ -55,6 +55,7 @@ page   -> bridge  {type:'hello', token}
 bridge -> page    {type:'paired'}
 bridge -> page    {type:'run', id, command}
 page   -> bridge  {type:'result', id, stdout, stderr, status, cwd}
+page   -> bridge  {type:'error', id, message}   the tab cannot run commands
 ```
 
 Calls time out after 10 seconds. Close code 4001 means a bad token; 4000 means

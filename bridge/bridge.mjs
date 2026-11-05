@@ -20,6 +20,7 @@
 //   bridge -> page  {type:'paired'}
 //   bridge -> page  {type:'run', id, command}
 //   page -> bridge  {type:'result', id, stdout, stderr, status, cwd}
+//   page -> bridge  {type:'error', id, message}   (the tab cannot run commands)
 
 import { createServer } from 'node:http'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
@@ -158,11 +159,12 @@ function accept(socket) {
       log('page connected')
       return
     }
-    if (message?.type === 'result' && pending.has(message.id)) {
+    if ((message?.type === 'result' || message?.type === 'error') && pending.has(message.id)) {
       const call = pending.get(message.id)
       pending.delete(message.id)
       clearTimeout(call.timer)
-      call.resolve(message)
+      if (message.type === 'error') call.reject(new Error(String(message.message)))
+      else call.resolve(message)
     }
   }
   socket.onclose = () => {
