@@ -4,6 +4,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { LineEditor } from './line-editor.js'
 import { intro } from './intro.js'
 import { complete } from './completion.js'
+import { connectAgent, readPairing } from './agent-link.js'
 import { colors as c, displayPath, plainText, terminalText, wrapText } from './terminal-text.js'
 import './style.css'
 
@@ -61,8 +62,7 @@ let activeId = 0
 let completed = 0
 let openingVisible = false
 // Commands from a paired local agent; they run one at a time when the shell is idle.
-let agentSocket
-const agentQueue = []
+let agent = null
 let agentJob = null
 let agentDraft = null
 let failure = ''
@@ -162,7 +162,7 @@ function fail(message) {
   editor.active = false
   failure = message
   setState('failed')
-  for (const job of [agentJob, ...agentQueue.splice(0)]) if (job) refuseAgent(job.id)
+  for (const job of [agentJob, ...(agent?.drain() ?? [])]) if (job) refuseAgent(job.id)
   agentJob = null
   editor.enqueue(() => output(`${message}\nUse “new session” to try again.`, c.red))
 }
@@ -179,7 +179,7 @@ function startSession(message, clear = false) {
   cwd = '/home/lash/workspace'
   files = []
   if (agentJob) {
-    replyToAgent(agentJob.id, { stdout: '', stderr: message || 'The workspace was reset.', status: 130, cwd })
+    agent.reply(agentJob.id, { stdout: '', stderr: message || 'The workspace was reset.', status: 130, cwd })
     agentJob = null
   }
   editor.enqueue(async () => {
@@ -214,12 +214,12 @@ function startSession(message, clear = false) {
         result.textContent = `${data.status === 0 ? '' : `exit ${data.status} · `}${data.elapsed < 1000 ? `${Math.round(data.elapsed)} ms` : `${(data.elapsed / 1000).toFixed(1)} s`}`
         result.dataset.failed = String(data.status !== 0)
         if (agentJob?.workerId === data.id) {
-          replyToAgent(agentJob.id, data)
+          agent.reply(agentJob.id, data)
           agentJob = null
         }
       }
       await prompt()
-      if (!agentJob && agentDraft !== null && !agentQueue.length) {
+      if (!agentJob && agentDraft !== null && !agent?.pending) {
         await editor.replace(agentDraft)
         agentDraft = null
       }
@@ -244,27 +244,19 @@ function setAgentStatus(value) {
   agentStatus.lastChild.textContent = `agent ${value}`
 }
 
-function replyToAgent(id, { stdout, stderr, status, cwd }) {
-  if (agentSocket?.readyState === WebSocket.OPEN) {
-    agentSocket.send(JSON.stringify({ type: 'result', id, stdout, stderr, status, cwd }))
-  }
-}
-
 // Tell the agent right away when this tab cannot run commands, instead of
 // letting the call wait for the bridge's timeout.
 function refuseAgent(id) {
-  if (agentSocket?.readyState !== WebSocket.OPEN) return
-  const message = `The shell in the user's browser tab is unavailable: ${failure} ` +
-    'Ask the user to open the pairing URL in a current Chrome or Edge browser, or to start a new session.'
-  agentSocket.send(JSON.stringify({ type: 'error', id, message }))
+  agent?.refuse(id, `The shell in the user's browser tab is unavailable: ${failure} ` +
+    'Ask the user to open the pairing URL in a current Chrome or Edge browser, or to start a new session.')
 }
 
 // Run the next agent command through the same worker path as typed input,
 // echoed at a labeled prompt. The human's unfinished draft is restored after.
 function pumpAgent() {
   editor.enqueue(async () => {
-    if (agentJob || state !== 'ready' || !editor.active || dialog.open || !agentQueue.length) return
-    agentJob = agentQueue.shift()
+    if (agentJob || state !== 'ready' || !editor.active || dialog.open || !agent?.pending) return
+    agentJob = agent.next()
     if (agentDraft === null) agentDraft = editor.text.join('')
     openingVisible = false
     editor.path = `${c.blue}agent ›${c.reset} ${c.green}${displayPath(cwd)}`
@@ -274,33 +266,6 @@ function pumpAgent() {
     agentJob.workerId = nextId + 1
     dispatch(agentJob.command)
   })
-}
-
-function connectAgent(token, port) {
-  const socket = new WebSocket(`ws://127.0.0.1:${port}`)
-  agentSocket = socket
-  setAgentStatus('connecting')
-  socket.onopen = () => socket.send(JSON.stringify({ type: 'hello', token }))
-  socket.onmessage = ({ data }) => {
-    const message = JSON.parse(data)
-    if (message.type === 'paired') setAgentStatus('connected')
-    if (message.type === 'cancel') {
-      const index = agentQueue.findIndex(job => job.id === message.id)
-      if (index >= 0) agentQueue.splice(index, 1)
-    }
-    if (message.type === 'run' && typeof message.command === 'string') {
-      if (state === 'failed') return refuseAgent(message.id)
-      agentQueue.push({ id: message.id, command: message.command })
-      pumpAgent()
-    }
-  }
-  socket.onclose = ({ code }) => {
-    agentQueue.length = 0
-    // 4000: another tab paired; 4001: wrong token. Neither improves by retrying.
-    if (code === 4000 || code === 4001) return setAgentStatus(code === 4001 ? 'rejected' : 'disconnected')
-    setAgentStatus('disconnected')
-    setTimeout(() => connectAgent(token, port), 3000)
-  }
 }
 
 help.addEventListener('click', () => editor.enqueue(async () => {
@@ -373,10 +338,15 @@ window.addEventListener('pagehide', () => {
 startSession(undefined, true)
 term.focus()
 
-const pairing = new URLSearchParams(location.hash.slice(1))
-if (pairing.get('pair')) {
+const pairing = readPairing(location.hash)
+if (pairing) {
   history.replaceState(null, '', location.pathname + location.search)
-  const requested = Number(pairing.get('port'))
-  const port = Number.isInteger(requested) && requested >= 1024 && requested <= 65535 ? requested : 7357
-  connectAgent(pairing.get('pair'), port)
+  agent = connectAgent({
+    ...pairing,
+    onStatus: setAgentStatus,
+    onCommand() {
+      if (state !== 'failed') return pumpAgent()
+      for (const job of agent.drain()) refuseAgent(job.id)
+    },
+  })
 }
