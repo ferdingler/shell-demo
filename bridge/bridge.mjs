@@ -233,7 +233,7 @@ const tools = [
   {
     name: 'run_shell',
     description: 'Run a command in the Strands Shell sandbox open in the user\'s browser tab. ' +
-      'This is a Bourne-compatible shell with an in-memory workspace (grep, sed, jq, awk, lua, ...), ' +
+      'This is a Bourne-compatible shell with an in-memory workspace (grep, sed, jq, find, lua, ...), ' +
       'no network access, and no access to the user\'s machine or files. State persists between calls ' +
       'until the tab reloads or resets; commands are limited to about 5 seconds. ' +
       'The user sees each command in their terminal.',

@@ -3,6 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { LineEditor } from './line-editor.js'
 import { intro } from './intro.js'
+import { complete } from './completion.js'
 import { colors as c, displayPath, plainText, terminalText, wrapText } from './terminal-text.js'
 import './style.css'
 
@@ -66,8 +67,7 @@ let agentJob = null
 let agentDraft = null
 let failure = ''
 
-const commands = 'alias awk basename cat cd chmod clear cp cut date dirname echo env exit export false find grep head help history jq ls lua mkdir mv printf pwd reset rm rmdir sed seq sleep sort source tail tee test touch tr true uname uniq unset wc which whoami xargs'.split(' ')
-const editor = new LineEditor(term, { submit: run, interrupt, complete })
+const editor = new LineEditor(term, { submit: run, interrupt, complete: before => complete(before, files) })
 term.onData(data => {
   if (['\x03', '\x0c', '\t'].includes(data)) openingVisible = false
 })
@@ -78,19 +78,6 @@ function setState(value) {
   status.textContent = { loading: 'starting', ready: 'local session', busy: 'running', failed: 'unavailable' }[value]
   stop.hidden = value !== 'busy'
   help.disabled = value !== 'ready'
-}
-
-function complete(before) {
-  const match = before.match(/(?:^|[\s;|])([\w./-]*)$/)
-  if (!match) return []
-  const word = match[1]
-  const isCommand = /(?:^|[;|])\s*[\w.-]*$/.test(before)
-  const choices = (isCommand ? commands : files)
-    .filter(name => name.startsWith(word) && /^[\w./-]+$/.test(name))
-    .sort()
-  return choices.length === 1
-    ? [choices[0].slice(word.length) + (choices[0].endsWith('/') ? '' : ' ')]
-    : choices
 }
 
 async function showHelp() {
