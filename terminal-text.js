@@ -17,6 +17,7 @@ export const colors = {
   green: '\x1b[38;2;181;219;149m',
   red: '\x1b[38;2;237;150;140m',
   white: '\x1b[38;2;220;225;217m',
+  blue: '\x1b[38;2;146;185;204m',
 }
 
 export function wrapText(text, columns) {

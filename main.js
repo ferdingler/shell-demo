@@ -3,7 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { LineEditor } from './line-editor.js'
 import { intro } from './intro.js'
-import { colors as c, displayPath, terminalText, wrapText } from './terminal-text.js'
+import { colors as c, displayPath, plainText, terminalText, wrapText } from './terminal-text.js'
 import './style.css'
 
 const container = document.querySelector('#terminal')
@@ -12,6 +12,7 @@ const result = document.querySelector('#last-result')
 const stop = document.querySelector('#stop')
 const help = document.querySelector('#help')
 const dialog = document.querySelector('#reset-dialog')
+const agentStatus = document.querySelector('#agent-status')
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 const smallScreen = matchMedia('(max-width: 650px)')
 const term = new Terminal({
@@ -58,6 +59,11 @@ let nextId = 0
 let activeId = 0
 let completed = 0
 let openingVisible = false
+// Commands from a paired local agent; they run one at a time when the shell is idle.
+let agentSocket
+const agentQueue = []
+let agentJob = null
+let agentDraft = null
 
 const commands = 'alias awk basename cat cd chmod clear cp cut date dirname echo env exit export false find grep head help history jq ls lua mkdir mv printf pwd reset rm rmdir sed seq sleep sort source tail tee test touch tr true uname uniq unset wc which whoami xargs'.split(' ')
 const editor = new LineEditor(term, { submit: run, interrupt, complete })
@@ -105,6 +111,7 @@ async function showHelp() {
     `clear     clear the screen`,
     `history   show this session's commands`,
     `reset     start a fresh workspace`,
+    `agent     node bridge/bridge.mjs pairs a local AI agent`,
     '',
     `Files live until reload or reset. Network is disabled.`,
     `Commands finish before output appears. No interactive`,
@@ -117,6 +124,7 @@ async function prompt() {
   await editor.prompt(displayPath(cwd))
   container.dataset.completed = String(completed)
   setState('ready')
+  pumpAgent()
 }
 
 async function output(text, color = '') {
@@ -145,6 +153,10 @@ async function run(command) {
     dialog.showModal()
     return prompt()
   }
+  dispatch(command)
+}
+
+function dispatch(command) {
   setState('busy')
   result.textContent = ''
   activeId = ++nextId
@@ -174,6 +186,10 @@ function startSession(message, clear = false) {
   result.textContent = ''
   cwd = '/home/lash/workspace'
   files = []
+  if (agentJob) {
+    replyToAgent(agentJob.id, { stdout: '', stderr: message || 'The workspace was reset.', status: 130, cwd })
+    agentJob = null
+  }
   editor.enqueue(async () => {
     if (clear) {
       await editor.clear()
@@ -205,8 +221,16 @@ function startSession(message, clear = false) {
         completed++
         result.textContent = `${data.status === 0 ? '' : `exit ${data.status} · `}${data.elapsed < 1000 ? `${Math.round(data.elapsed)} ms` : `${(data.elapsed / 1000).toFixed(1)} s`}`
         result.dataset.failed = String(data.status !== 0)
+        if (agentJob?.workerId === data.id) {
+          replyToAgent(agentJob.id, data)
+          agentJob = null
+        }
       }
       await prompt()
+      if (!agentJob && agentDraft !== null && !agentQueue.length) {
+        await editor.replace(agentDraft)
+        agentDraft = null
+      }
       if (!dialog.open) term.focus()
     })
   }
@@ -219,6 +243,57 @@ function interrupt() {
   if (state === 'busy') {
     editor.enqueue(() => editor.write('^C\r\n'))
     startSession('Command stopped. The workspace was reset.')
+  }
+}
+
+function setAgentStatus(value) {
+  agentStatus.hidden = false
+  agentStatus.dataset.state = value
+  agentStatus.lastChild.textContent = `agent ${value}`
+}
+
+function replyToAgent(id, { stdout, stderr, status, cwd }) {
+  if (agentSocket?.readyState === WebSocket.OPEN) {
+    agentSocket.send(JSON.stringify({ type: 'result', id, stdout, stderr, status, cwd }))
+  }
+}
+
+// Run the next agent command through the same worker path as typed input,
+// echoed at a labeled prompt. The human's unfinished draft is restored after.
+function pumpAgent() {
+  editor.enqueue(async () => {
+    if (agentJob || state !== 'ready' || !editor.active || dialog.open || !agentQueue.length) return
+    agentJob = agentQueue.shift()
+    if (agentDraft === null) agentDraft = editor.text.join('')
+    openingVisible = false
+    editor.path = `${c.blue}agent ›${c.reset} ${c.green}${displayPath(cwd)}`
+    await editor.replace(plainText(agentJob.command))
+    await editor.write('\r\n')
+    editor.active = false
+    agentJob.workerId = nextId + 1
+    dispatch(agentJob.command)
+  })
+}
+
+function connectAgent(token, port) {
+  const socket = new WebSocket(`ws://127.0.0.1:${port}`)
+  agentSocket = socket
+  setAgentStatus('connecting')
+  socket.onopen = () => socket.send(JSON.stringify({ type: 'hello', token }))
+  socket.onmessage = ({ data }) => {
+    const message = JSON.parse(data)
+    if (message.type === 'paired') setAgentStatus('connected')
+    if (message.type === 'run' && typeof message.command === 'string') {
+      agentQueue.push({ id: message.id, command: message.command })
+      pumpAgent()
+    }
+  }
+  socket.onclose = ({ code }) => {
+    agentQueue.length = 0
+    // 4000: another tab paired; 4001: wrong token. Neither improves by retrying.
+    if (code === 4000 || code === 4001) return setAgentStatus(code === 4001 ? 'rejected' : 'disconnected')
+    setAgentStatus('disconnected')
+    setTimeout(() => connectAgent(token, port), 3000)
   }
 }
 
@@ -290,3 +365,10 @@ window.addEventListener('pagehide', () => {
 
 startSession(undefined, true)
 term.focus()
+
+const pairing = new URLSearchParams(location.hash.slice(1))
+if (pairing.get('pair')) {
+  history.replaceState(null, '', location.pathname + location.search)
+  const port = Number(pairing.get('port')) || 7357
+  connectAgent(pairing.get('pair'), port)
+}

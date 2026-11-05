@@ -51,6 +51,10 @@ h1 { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight
 body[data-state="ready"] .state-dot { background: var(--accent); box-shadow: 0 0 8px #b5db9528; }
 body[data-state="failed"] .state-dot { background: #ed968c; }
 body[data-state="busy"] .state-dot { animation: pulse 1s ease-in-out infinite; }
+.agent-state .state-dot { background: #515d54; }
+.agent-state[data-state="connected"] { color: #92b9cc; }
+.agent-state[data-state="connected"] .state-dot { background: #92b9cc; box-shadow: 0 0 8px #92b9cc28; }
+.agent-state[data-state="rejected"] .state-dot { background: #ed968c; }
 
 .terminal-region { flex: 1; min-height: 0; padding: 27px 30px 12px; }
 #terminal { height: 100%; }
