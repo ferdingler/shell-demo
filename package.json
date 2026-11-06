@@ -5,6 +5,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "engines": { "node": ">=22.12.0" },
+  "bin": { "tryshell": "bridge/bridge.mjs" },
   "scripts": {
     "build:wasm": "bash engine/build.sh",
     "build": "npm run build:wasm && vite build web",

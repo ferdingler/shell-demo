@@ -448,7 +448,7 @@ function main() {
     log(`listening on ws://127.0.0.1:${port}`)
     log(`allowed origins: ${bridge.origins().join(', ')}`)
     log(`pairing URL: ${bridge.pairingUrl()}`)
-    if (args.http) log(`run commands: curl -s http://127.0.0.1:${port}/run -H 'Authorization: Bearer ${bridge.token}' --data-binary '<command>'`)
+    if (args.http) log(`run commands: curl -s http://127.0.0.1:${port}/run -H 'Authorization: Bearer ${bridge.token}' --data-binary @- <<'EOF' ... EOF`)
     if (args.open) {
       const [command, ...rest] = process.platform === 'darwin' ? ['open']
         : process.platform === 'win32' ? ['cmd', '/c', 'start', '""'] : ['xdg-open']
