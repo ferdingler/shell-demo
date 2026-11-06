@@ -4,7 +4,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { LineEditor } from './line-editor.js'
 import { intro } from './intro.js'
 import { complete } from './completion.js'
-import { connectAgent, readPairing } from './agent-link.js'
+import { agentPrompt, connectAgent, defaultBridgePort, newToken, readPairing } from './agent-link.js'
 import { LimitError, ResetError, commandLimit, createSession } from './session.js'
 import { colors as c, displayPath, plainText, terminalText, wrapText } from './terminal-text.js'
 import './style.css'
@@ -16,6 +16,7 @@ const stop = document.querySelector('#stop')
 const help = document.querySelector('#help')
 const dialog = document.querySelector('#reset-dialog')
 const agentStatus = document.querySelector('#agent-status')
+const agentDialog = document.querySelector('#agent-dialog')
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 const smallScreen = matchMedia('(max-width: 650px)')
 const term = new Terminal({
@@ -66,6 +67,7 @@ let completed = 0
 let openingVisible = false
 // Commands from a paired local agent; they run one at a time when the shell is idle.
 let agent = null
+let agentToken = null
 let agentJob = null
 let agentDraft = null
 let failure = ''
@@ -102,7 +104,7 @@ async function showHelp() {
     `clear     clear the screen`,
     `history   show this session's commands`,
     `reset     start a fresh workspace`,
-    `agent     node bridge/bridge.mjs pairs a local AI agent`,
+    `agent     connect an AI agent on your computer`,
     '',
     `Files live until reload or reset. Network is disabled.`,
     `Commands finish before output appears. No interactive`,
@@ -138,6 +140,10 @@ async function run(command) {
   }
   if (trimmed === 'history') {
     await output(editor.history.map((line, i) => `  ${String(i + 1).padStart(3)}  ${line}`).join('\n'))
+    return prompt()
+  }
+  if (trimmed === 'agent') {
+    openAgentDialog()
     return prompt()
   }
   if (trimmed === 'reset' || trimmed === 'exit') {
@@ -242,6 +248,28 @@ function setAgentStatus(value) {
   agentStatus.hidden = false
   agentStatus.dataset.state = value
   agentStatus.lastChild.textContent = `agent ${value}`
+  document.querySelector('#agent-wait').textContent = value === 'connected' ? 'Agent connected.' : 'Waiting for the agent…'
+  if (value === 'connected' && agentDialog.open) agentDialog.close()
+}
+
+function startAgent(pairing) {
+  agentToken = pairing.token
+  agent = connectAgent({
+    ...pairing,
+    onStatus: setAgentStatus,
+    onCommand() {
+      if (state !== 'failed') return pumpAgent()
+      for (const job of agent.drain()) refuseAgent(job.id)
+    },
+  })
+}
+
+// Shows the prompt to paste into a local agent. The tab starts waiting for the
+// bridge only now, so visitors who never ask are not probed for local access.
+function openAgentDialog() {
+  if (!agent) startAgent({ token: newToken(), port: defaultBridgePort })
+  document.querySelector('#agent-prompt').textContent = agentPrompt({ token: agentToken, pageUrl: location.href })
+  agentDialog.showModal()
 }
 
 // Tell the agent right away when this tab cannot run commands, instead of
@@ -279,6 +307,19 @@ document.querySelector('#clear').addEventListener('click', () => editor.enqueue(
   term.focus()
 }))
 document.querySelector('#reset').addEventListener('click', () => dialog.showModal())
+document.querySelector('#connect-agent').addEventListener('click', openAgentDialog)
+document.querySelector('#copy-agent-prompt').addEventListener('click', async event => {
+  const button = event.currentTarget
+  try {
+    await navigator.clipboard.writeText(document.querySelector('#agent-prompt').textContent)
+    button.textContent = 'Copied ✓'
+  } catch {
+    getSelection().selectAllChildren(document.querySelector('#agent-prompt'))
+    button.textContent = 'Press Ctrl+C to copy'
+  }
+  setTimeout(() => { button.textContent = 'Copy prompt' }, 2000)
+})
+agentDialog.addEventListener('close', () => term.focus())
 stop.addEventListener('click', interrupt)
 document.querySelector('#accessibility').addEventListener('click', event => {
   term.options.screenReaderMode = !term.options.screenReaderMode
@@ -337,12 +378,5 @@ term.focus()
 const pairing = readPairing(location.hash)
 if (pairing) {
   history.replaceState(null, '', location.pathname + location.search)
-  agent = connectAgent({
-    ...pairing,
-    onStatus: setAgentStatus,
-    onCommand() {
-      if (state !== 'failed') return pumpAgent()
-      for (const job of agent.drain()) refuseAgent(job.id)
-    },
-  })
+  startAgent(pairing)
 }

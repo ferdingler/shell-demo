@@ -18,6 +18,39 @@ export function readPairing(hash) {
   return { token, port }
 }
 
+// A fresh pairing token: 24 random bytes, base64url, as the bridge makes them.
+export function newToken(crypto = globalThis.crypto) {
+  const bytes = crypto.getRandomValues(new Uint8Array(24))
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+// The prompt a visitor pastes into a local agent. The agent starts the bridge
+// with this page's token, and the page, already waiting on the default port,
+// pairs as soon as it is up. The quoted heredoc passes commands through the
+// agent's own shell untouched. `pageUrl` is added only off tryshell.sh, whose
+// origin the bridge allows by default.
+export function agentPrompt({ token, pageUrl }) {
+  const page = new URL(pageUrl)
+  page.hash = ''
+  page.search = ''
+  const flag = page.origin === 'https://tryshell.sh' ? '' : ` --page-url ${page.href}`
+  return [
+    `I have Strands Shell open in my browser at ${page.href}. Connect to it and drive it for me.`,
+    '',
+    '1. Start the bridge in the background and leave it running:',
+    '',
+    `   npx -y github:ferdingler/tryshell --http --token ${token}${flag}`,
+    '',
+    '2. Run each shell command in my tab like this. The quoted heredoc passes the command through your shell untouched:',
+    '',
+    `   curl -s http://127.0.0.1:${defaultBridgePort}/run -H 'Authorization: Bearer ${token}' --data-binary @- <<'EOF'`,
+    '   ls -la',
+    '   EOF',
+    '',
+    'It is a sandboxed, Bourne-compatible shell with an in-memory workspace; I can watch every command in my tab. Start by exploring what it can do.',
+  ].join('\n')
+}
+
 // Status values: connecting, connected, disconnected, rejected.
 // onCommand() fires whenever a new command is queued.
 export function connectAgent({ token, port, onStatus, onCommand, WebSocket = globalThis.WebSocket, retryDelay = 3000 }) {

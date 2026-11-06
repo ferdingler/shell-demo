@@ -94,6 +94,9 @@ dialog p { color: #a7b1a9; font-size: 12px; line-height: 1.8; margin: 0 0 25px; 
 .dialog-actions { display: flex; justify-content: flex-end; gap: 23px; font-family: var(--font-mono); font-size: 11px; }
 .dialog-actions button { padding: 8px 0; }
 .dialog-actions .confirm { color: var(--accent); }
+#agent-dialog { width: 640px; }
+#agent-prompt { margin: 0 0 18px; padding: 14px 16px; max-height: 45vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: #dce1d9; background: #121614; border: 1px solid #2f3831; border-radius: 4px; }
+#agent-dialog .agent-wait { margin: 0 0 18px; font-size: 11px; }
 noscript { padding: 32px; color: #ed968c; }
 
 @keyframes pulse { 50% { opacity: .3; } }

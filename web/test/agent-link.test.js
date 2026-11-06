@@ -85,3 +85,20 @@ test('replies are dropped while the socket is not open', () => {
   agent.reply(1, { stdout: '', stderr: '', status: 0, cwd: '/' })
   assert.deepEqual(sockets[0].sent, [])
 })
+
+test('newToken makes distinct base64url tokens the bridge accepts', async () => {
+  const { newToken } = await import('../agent-link.js')
+  const a = newToken(), b = newToken()
+  assert.match(a, /^[\w-]{32}$/)
+  assert.notEqual(a, b)
+})
+
+test('agentPrompt carries the token and adds --page-url only off tryshell.sh', async () => {
+  const { agentPrompt } = await import('../agent-link.js')
+  const live = agentPrompt({ token: 'tok123', pageUrl: 'https://tryshell.sh/#pair=old' })
+  assert.match(live, /npx -y github:ferdingler\/tryshell --http --token tok123\n/)
+  assert.match(live, /Authorization: Bearer tok123' --data-binary @- <<'EOF'/)
+  assert.doesNotMatch(live, /--page-url|#pair/)
+  const local = agentPrompt({ token: 't', pageUrl: 'http://127.0.0.1:4173/?x=1' })
+  assert.match(local, /--token t --page-url http:\/\/127\.0\.0\.1:4173\/\n/)
+})

@@ -26,6 +26,7 @@
         <button id="help" type="button" title="Show commands and keyboard shortcuts"><span class="key">?</span> help</button>
         <span class="desktop-hint"><span class="key">↑↓</span> history</span>
         <button id="clear" type="button" title="Clear terminal (Ctrl+L)"><span class="key">^L</span> clear</button>
+        <button id="connect-agent" class="desktop-hint" type="button" title="Let an AI agent on your computer run commands here"><span class="key">⇄</span> agent</button>
         <button id="stop" type="button" hidden title="Stop execution and reset workspace (Ctrl+C)"><span class="key">^C</span> stop</button>
       </div>
       <div class="session-info">
@@ -40,6 +41,18 @@
         <div class="dialog-actions">
           <button value="cancel" autofocus>Keep working</button>
           <button value="reset" class="confirm">New session ↻</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="agent-dialog" aria-labelledby="agent-title">
+      <form method="dialog">
+        <h2 id="agent-title">Connect an AI agent</h2>
+        <p>Paste this into Claude Code, Codex, or any agent that can run shell commands.<br>It starts a small bridge on your computer (127.0.0.1 only) that sends commands to this tab.</p>
+        <pre id="agent-prompt" tabindex="0"></pre>
+        <p id="agent-wait" class="agent-wait" role="status">Waiting for the agent…</p>
+        <div class="dialog-actions">
+          <button value="close">Close</button>
+          <button id="copy-agent-prompt" type="button" class="confirm" autofocus>Copy prompt</button>
         </div>
       </form>
     </dialog>
