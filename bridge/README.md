@@ -90,7 +90,7 @@ another tab took over.
 When the page comes from a public site such as `https://tryshell.sh`, recent
 Chrome and Edge versions may ask for permission to access devices on the local
 network before the page can reach `127.0.0.1`. Allow it for the site; if it is
-blocked, the titlebar stays at **agent disconnected** and you can re-enable it
+blocked, the titlebar stays at **connect your agent** and you can re-enable it
 from the site settings. Pages served from `127.0.0.1` or `localhost` are not
 asked. `npm run check:bridge` serves the page locally, so it does not cover this
 prompt.

@@ -48,12 +48,11 @@ h1 { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight
 .titlebar-right a { display: flex; gap: 4px; padding: 10px 0 10px 10px; font-size: 10px; letter-spacing: .35px; text-decoration: none; }
 .session-state { display: flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .35px; color: var(--muted); }
 .state-dot { width: 5px; height: 5px; border-radius: 50%; background: #d7b779; }
-body[data-state="ready"] .state-dot { background: var(--accent); box-shadow: 0 0 8px #b5db9528; }
-body[data-state="failed"] .state-dot { background: #ed968c; }
-body[data-state="busy"] .state-dot { animation: pulse 1s ease-in-out infinite; }
+.agent-state { min-height: 40px; white-space: nowrap; }
 .agent-state .state-dot { background: #515d54; }
-.agent-state[data-state="connected"] { color: #92b9cc; }
-.agent-state[data-state="connected"] .state-dot { background: #92b9cc; box-shadow: 0 0 8px #92b9cc28; }
+.agent-state[data-state="connected"] { color: var(--accent); }
+.agent-state[data-state="connected"] .state-dot { background: var(--accent); box-shadow: 0 0 8px #b5db9528; }
+body[data-state="busy"] .agent-state[data-state="connected"] .state-dot { animation: pulse 1s ease-in-out infinite; }
 .agent-state[data-state="rejected"] .state-dot { background: #ed968c; }
 
 .terminal-region { flex: 1; min-height: 0; padding: 7px 30px 12px; }
@@ -116,5 +115,7 @@ noscript { padding: 32px; color: #ed968c; }
   #last-result { max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
 }
 @media (max-width: 380px) {
+  .wide-only { display: none; }
+  .titlebar-right { gap: 8px; }
   #last-result { display: none; }
 }

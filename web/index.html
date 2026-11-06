@@ -13,8 +13,7 @@
     <header class="titlebar">
       <h1><img class="mark" src="/strands-logo.svg" width="28" height="28" alt=""> strands <span class="slash">/</span> <span class="product">shell</span></h1>
       <div class="titlebar-right">
-        <span id="agent-status" class="session-state agent-state" hidden title="A local AI agent can run commands in this tab"><span class="state-dot" aria-hidden="true"></span><span role="status">agent</span></span>
-        <span class="session-state"><span class="state-dot" aria-hidden="true"></span><span id="runtime-status" role="status">starting</span></span>
+        <button id="agent-status" class="session-state agent-state" type="button" title="Let an AI agent on your computer run commands in this tab"><span class="state-dot" aria-hidden="true"></span><span role="status">connect <span class="wide-only">your </span>agent</span></button>
         <a href="https://github.com/strands-agents/shell" target="_blank" rel="noopener noreferrer" title="Open Strands Shell on GitHub">github <span aria-hidden="true">↗</span></a>
       </div>
     </header>
@@ -26,7 +25,6 @@
         <button id="help" type="button" title="Show commands and keyboard shortcuts"><span class="key">?</span> help</button>
         <span class="desktop-hint"><span class="key">↑↓</span> history</span>
         <button id="clear" type="button" title="Clear terminal (Ctrl+L)"><span class="key">^L</span> clear</button>
-        <button id="connect-agent" class="desktop-hint" type="button" title="Let an AI agent on your computer run commands here"><span class="key">⇄</span> agent</button>
         <button id="stop" type="button" hidden title="Stop execution and reset workspace (Ctrl+C)"><span class="key">^C</span> stop</button>
       </div>
       <div class="session-info">

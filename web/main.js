@@ -10,7 +10,6 @@ import { colors as c, displayPath, plainText, terminalText, wrapText } from './t
 import './style.css'
 
 const container = document.querySelector('#terminal')
-const status = document.querySelector('#runtime-status')
 const result = document.querySelector('#last-result')
 const stop = document.querySelector('#stop')
 const help = document.querySelector('#help')
@@ -80,7 +79,6 @@ term.onData(data => {
 function setState(value) {
   state = value
   document.body.dataset.state = value
-  status.textContent = { loading: 'starting', ready: 'local session', busy: 'running', failed: 'unavailable' }[value]
   stop.hidden = value !== 'busy'
   help.disabled = value !== 'ready'
 }
@@ -245,9 +243,8 @@ function interrupt() {
 }
 
 function setAgentStatus(value) {
-  agentStatus.hidden = false
   agentStatus.dataset.state = value
-  agentStatus.lastChild.textContent = `agent ${value}`
+  agentStatus.lastChild.innerHTML = value === 'connected' ? 'agent connected' : 'connect <span class="wide-only">your </span>agent'
   document.querySelector('#agent-wait').textContent = value === 'connected' ? 'Agent connected.' : 'Waiting for the agent…'
   if (value === 'connected' && agentDialog.open) agentDialog.close()
 }
@@ -307,7 +304,7 @@ document.querySelector('#clear').addEventListener('click', () => editor.enqueue(
   term.focus()
 }))
 document.querySelector('#reset').addEventListener('click', () => dialog.showModal())
-document.querySelector('#connect-agent').addEventListener('click', openAgentDialog)
+agentStatus.addEventListener('click', openAgentDialog)
 document.querySelector('#copy-agent-prompt').addEventListener('click', async event => {
   const button = event.currentTarget
   try {
