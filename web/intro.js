@@ -14,22 +14,15 @@ const shell = [
   "\\__ \\ | | |  __/ | |",
   "|___/_| |_|\\___|_|_|",
 ]
-// figlet's Mini font, for terminals too narrow for the full art (phones).
-const compact = [
-  ' _ _|_ ._ _. ._   _|  _    _ |_   _  | |',
-  '_>  |_ | (_| | | (_| _>   _> | | (/_ | |',
-]
 const width = Math.max(...strands.map(line => line.length))
 const wide = strands.map((line, index) => `${line.padEnd(width + 3)}${shell[index]}`.trimEnd())
 const wideWidth = Math.max(...wide.map(line => line.length))
-const compactWidth = Math.max(...compact.map(line => line.length))
 const description = 'A sandboxed, Bourne-compatible shell for AI agents. Written in Rust with an in-memory filesystem.'
 const suggestion = 'Try commands like ls, mkdir, cat, cd, jq and many others.'
 
 export function intro(columns) {
-  const artwork = columns >= wideWidth ? wide
-    : columns >= compactWidth ? compact
-      : ['strands / shell']
+  // Narrow terminals (phones) get plain text instead of ASCII art.
+  const artwork = columns >= wideWidth ? wide : ['strands / shell']
   return `${colors.green}${artwork.join('\r\n')}${colors.reset}\r\n\r\n` +
     `${colors.muted}${wrapText(description, columns)}\r\n${wrapText(suggestion, columns)}${colors.reset}\r\n\r\n`
 }
