@@ -369,7 +369,8 @@ export function createBridge({
       if (size > bodyLimit) return reply(413, 'Command too large.')
       chunks.push(chunk)
     }
-    const command = Buffer.concat(chunks).toString('utf8')
+    // A heredoc ends with a newline; the tab would echo it as an empty line.
+    const command = Buffer.concat(chunks).toString('utf8').replace(/\n+$/, '')
     if (!command.trim()) return reply(400, 'Empty command: send it as the request body.')
     try {
       const result = await runInPage(command)

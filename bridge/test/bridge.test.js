@@ -220,7 +220,7 @@ test('HTTP mode refuses web pages, rebinding hosts, and wrong tokens', async () 
 test('HTTP mode runs the body as a command in the paired page', async () => {
   const bridge = createBridge({ token: 'secret' })
   const page = fakePage(bridge, 'secret')
-  const reply = httpCall(bridge, { headers: { authorization: 'Bearer secret' }, body: "echo 'hi there'" })
+  const reply = httpCall(bridge, { headers: { authorization: 'Bearer secret' }, body: "echo 'hi there'\n" })
   await new Promise(setImmediate)
   const run = page.sent[1]
   assert.equal(run.command, "echo 'hi there'")
