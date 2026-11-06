@@ -185,3 +185,45 @@ test('long output keeps its start and end', () => {
   assert.ok(clipped.length < 16100)
   assert.match(clipped, /^a+\n\[\.\.\. \d+ characters truncated \.\.\.\]\na+END$/)
 })
+
+// An HTTP request/response pair for handleHttp: the body is async-iterable.
+function httpCall(bridge, { method = 'POST', url = '/run', headers = {}, body = '' } = {}) {
+  const request = {
+    method, url,
+    headers: { host: '127.0.0.1:7357', ...headers },
+    async *[Symbol.asyncIterator]() { if (body) yield Buffer.from(body) },
+  }
+  return new Promise(resolve => {
+    const response = {
+      writeHead(code) { this.code = code; return this },
+      end(text) { resolve({ code: this.code, text }) },
+    }
+    bridge.handleHttp(request, response)
+  })
+}
+
+test('HTTP mode refuses web pages, rebinding hosts, and wrong tokens', async () => {
+  const bridge = createBridge({ token: 'secret' })
+  const auth = { authorization: 'Bearer secret' }
+  assert.equal((await httpCall(bridge, { headers: { ...auth, origin: 'https://evil.test' } })).code, 403)
+  assert.equal((await httpCall(bridge, { headers: { ...auth, host: 'evil.test:7357' } })).code, 403)
+  assert.equal((await httpCall(bridge, { headers: { authorization: 'Bearer nope' } })).code, 401)
+  assert.equal((await httpCall(bridge)).code, 401)
+  assert.equal((await httpCall(bridge, { headers: auth, url: '/other' })).code, 404)
+  assert.equal((await httpCall(bridge, { headers: auth, method: 'GET' })).code, 405)
+  assert.equal((await httpCall(bridge, { headers: auth, body: '  ' })).code, 400)
+  const unpaired = await httpCall(bridge, { headers: { ...auth, host: 'localhost:7357' }, body: 'ls' })
+  assert.equal(unpaired.code, 503)
+  assert.match(unpaired.text, /pairing URL/)
+})
+
+test('HTTP mode runs the body as a command in the paired page', async () => {
+  const bridge = createBridge({ token: 'secret' })
+  const page = fakePage(bridge, 'secret')
+  const reply = httpCall(bridge, { headers: { authorization: 'Bearer secret' }, body: "echo 'hi there'" })
+  await new Promise(setImmediate)
+  const run = page.sent[1]
+  assert.equal(run.command, "echo 'hi there'")
+  page.onmessage(JSON.stringify({ type: 'result', id: run.id, stdout: 'hi there\n', stderr: '', status: 0, cwd: '/w' }))
+  assert.deepEqual(await reply, { code: 200, text: 'exit status: 0\ncwd: /w\nstdout:\nhi there\n\nstderr:\n\n' })
+})

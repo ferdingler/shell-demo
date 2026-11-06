@@ -42,6 +42,26 @@ flags, so other sites, including local dev servers, cannot pair.
   files.
 - `pairing_url` returns the URL to open and whether a tab is connected.
 
+## Use without MCP (prototype)
+
+`--http` skips MCP: the bridge takes commands over HTTP, so an agent can start it
+in the background and use `curl`, with no MCP install or restart. The page's
+**agent** button shows a ready-made prompt with a token it generated:
+
+```sh
+npx -y github:ferdingler/tryshell --http --token <token>
+curl -s http://127.0.0.1:7357/run -H 'Authorization: Bearer <token>' --data-binary @- <<'EOF'
+ls -la
+EOF
+```
+
+`POST /run` takes the command as the body and replies in plain text with the
+exit status, cwd, stdout, and stderr. The quoted heredoc keeps the agent's own
+shell from expanding the command. Requests must carry the token, name
+`127.0.0.1` or `localhost` as `Host`, and carry no `Origin` header, so web pages
+cannot call it. With `--token`, the bridge stays on its port (default 7357)
+instead of falling back to a free one, since the page looks only there.
+
 ## Security
 
 The bridge listens on 127.0.0.1 only. A page is accepted only when its `Origin`

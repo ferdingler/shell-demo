@@ -5,7 +5,7 @@
 //   local agent --stdio MCP--> bridge.mjs (127.0.0.1:7357) <--WebSocket-- page --> wasm shell
 //
 // Usage:
-//   node bridge.mjs [--port 7357] [--page-url https://tryshell.sh/] [--origin <origin>]... [--open]
+//   node bridge.mjs [--port 7357] [--page-url https://tryshell.sh/] [--origin <origin>]... [--open] [--http] [--token <token>]
 //
 // Without --port the bridge uses 7357, or any free port when 7357 is taken (for
 // example by another agent session); the pairing URL then names the port.
@@ -26,6 +26,13 @@
 //   bridge -> page  {type:'cancel', id}            (the call gave up; skip it if queued)
 //   page -> bridge  {type:'result', id, stdout, stderr, status, cwd}
 //   page -> bridge  {type:'error', id, message}   (the tab cannot run commands)
+//
+// HTTP mode (--http, prototype): instead of MCP on stdio, the bridge takes
+// commands over HTTP so an agent can start it in the background and use curl:
+//   curl -s http://127.0.0.1:7357/run -H 'Authorization: Bearer <token>' --data-binary 'ls'
+// The reply is plain text: exit status, cwd, stdout, stderr. Requests must
+// carry the pairing token, name 127.0.0.1 or localhost as Host (no DNS
+// rebinding), and carry no Origin header (no web page can call it).
 //
 // The module also exports its parts (Socket, createBridge) for tests; it only
 // starts listening when run as a script.
@@ -168,6 +175,14 @@ export function clip(value = '') {
 }
 
 const text = (value, isError = false) => ({ content: [{ type: 'text', text: value }], isError })
+const describe = output => [
+  `exit status: ${output.status}`,
+  `cwd: ${output.cwd}`,
+  `stdout:\n${output.stdout}`,
+  `stderr:\n${output.stderr}`,
+].join('\n')
+// Largest command body accepted over HTTP.
+const bodyLimit = 1 << 20
 // Thrown when the client cancels a request; MCP expects no reply to it.
 const cancelled = Symbol('cancelled')
 const rpcResult = (id, result) => ({ jsonrpc: '2.0', id, result })
@@ -298,15 +313,7 @@ export function createBridge({
     try {
       const result = await runInPage(input.command, requestId)
       const output = { status: result.status, cwd: result.cwd, stdout: clip(result.stdout), stderr: clip(result.stderr) }
-      return {
-        ...text([
-          `exit status: ${output.status}`,
-          `cwd: ${output.cwd}`,
-          `stdout:\n${output.stdout}`,
-          `stderr:\n${output.stderr}`,
-        ].join('\n')),
-        structuredContent: output,
-      }
+      return { ...text(describe(output)), structuredContent: output }
     } catch (error) {
       if (error === cancelled) throw error
       return text(error.message, true)
@@ -342,6 +349,36 @@ export function createBridge({
     }
   }
 
+  // HTTP mode: POST /run with the command as the body; replies in plain text.
+  async function handleHttp(request, response) {
+    const reply = (code, body) => response.writeHead(code, { 'content-type': 'text/plain; charset=utf-8' }).end(body + '\n')
+    const host = request.headers.host ?? ''
+    if (request.headers.origin !== undefined || !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host)) {
+      log(`rejected an HTTP request from origin ${request.headers.origin ?? '(none)'} for host ${host || '(none)'}`)
+      return reply(403, 'Forbidden.')
+    }
+    const auth = /^Bearer (\S+)$/.exec(request.headers.authorization ?? '')
+    if (!auth || !tokenMatches(auth[1])) return reply(401, 'Missing or wrong token: send Authorization: Bearer <token>.')
+    const path = new URL(request.url, 'http://localhost').pathname
+    if (path !== '/run') return reply(404, 'Not found. POST /run with the command as the body.')
+    if (request.method !== 'POST') return reply(405, 'Use POST /run with the command as the body.')
+    const chunks = []
+    let size = 0
+    for await (const chunk of request) {
+      size += chunk.length
+      if (size > bodyLimit) return reply(413, 'Command too large.')
+      chunks.push(chunk)
+    }
+    const command = Buffer.concat(chunks).toString('utf8')
+    if (!command.trim()) return reply(400, 'Empty command: send it as the request body.')
+    try {
+      const result = await runInPage(command)
+      return reply(200, describe({ status: result.status, cwd: result.cwd, stdout: clip(result.stdout), stderr: clip(result.stderr) }))
+    } catch (error) {
+      return reply(page ? 504 : 503, error.message)
+    }
+  }
+
   async function handleLine(line) {
     if (!line.trim()) return null
     let message
@@ -358,7 +395,9 @@ export function createBridge({
     accept,
     upgrade,
     handleLine,
+    handleHttp,
     pairingUrl,
+    token,
     origins: () => [...allowed],
     get connected() { return page !== null },
     set port(value) { port = value },
@@ -374,19 +413,27 @@ function main() {
       'page-url': { type: 'string', default: 'https://tryshell.sh/' },
       origin: { type: 'string', multiple: true, default: [] },
       open: { type: 'boolean', default: false },
+      http: { type: 'boolean', default: false },
+      token: { type: 'string' },
     },
   })
   const log = (...parts) => console.error('[bridge]', ...parts)
   const requested = args.port === undefined ? defaultPort : Number(args.port)
-  const bridge = createBridge({ pageUrl: args['page-url'], origins: args.origin, log })
+  if (args.token !== undefined && !/^[\w-]{16,}$/.test(args.token)) {
+    log('--token must be at least 16 characters of A-Z, a-z, 0-9, _ or -')
+    process.exit(1)
+  }
+  const bridge = createBridge({ pageUrl: args['page-url'], origins: args.origin, token: args.token, log })
 
-  const server = createServer((request, response) => {
+  const server = createServer(args.http ? bridge.handleHttp : (request, response) => {
     response.writeHead(426, { 'content-type': 'text/plain' }).end('Strands Shell agent bridge: WebSocket only.\n')
   })
   server.on('upgrade', bridge.upgrade)
   let fellBack = false
   server.on('error', error => {
-    if (error.code === 'EADDRINUSE' && args.port === undefined && !fellBack) {
+    // A page holding its own token looks only on the default port, so --token
+    // never falls back to another one.
+    if (error.code === 'EADDRINUSE' && args.port === undefined && args.token === undefined && !fellBack) {
       log(`port ${requested} is in use; picking a free one`)
       fellBack = true
       return server.listen(0, '127.0.0.1')
@@ -401,6 +448,7 @@ function main() {
     log(`listening on ws://127.0.0.1:${port}`)
     log(`allowed origins: ${bridge.origins().join(', ')}`)
     log(`pairing URL: ${bridge.pairingUrl()}`)
+    if (args.http) log(`run commands: curl -s http://127.0.0.1:${port}/run -H 'Authorization: Bearer ${bridge.token}' --data-binary '<command>'`)
     if (args.open) {
       const [command, ...rest] = process.platform === 'darwin' ? ['open']
         : process.platform === 'win32' ? ['cmd', '/c', 'start', '""'] : ['xdg-open']
@@ -410,6 +458,7 @@ function main() {
     }
   })
 
+  if (args.http) return
   // MCP over stdio: newline-delimited JSON-RPC 2.0. Only replies go to stdout.
   createInterface({ input: process.stdin }).on('line', async line => {
     const reply = await bridge.handleLine(line)
